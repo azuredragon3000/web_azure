@@ -330,6 +330,7 @@
     /* ── Positions sort state ── */
     var openPositions  = [];
     var pos24hMap      = {}; // symbol -> priceChangePercent
+    var posGainerRankMap = {}; // symbol -> rank in current gainers table (1-based), 0 = not in top20
     var posSortCol     = 'size';
     var posSortAsc     = false; // default: high → low
 
@@ -380,6 +381,8 @@
         var roe      = notional > 0 ? (pnl / (notional / parseFloat(lev)) * 100) : 0;
         var lbl      = p.symbol.replace('USDT','');
         var chg      = parseFloat(pos24hMap[p.symbol] || 0);
+        var rank     = posGainerRankMap[p.symbol] || 0;
+        var rankBadge = rank > 0 ? ' <span style="font-size:0.7rem;color:#f0b90b;font-weight:700;">(#'+rank+')</span>' : '';
         return '<tr>'
           + '<td><div style="display:flex;align-items:center;gap:0.4rem;">'
           +   '<div class="coin-icon">' + lbl.substring(0,4) + '</div>'
@@ -395,7 +398,7 @@
           + '<td class="' + (pnl >= 0 ? 'up' : 'down') + '">' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' $</td>'
           + '<td class="' + (roe >= 0 ? 'up' : 'down') + '">' + (roe >= 0 ? '+' : '') + roe.toFixed(2) + '%</td>'
           + '<td>' + lev + 'x</td>'
-          + '<td class="' + (chg > 0 ? 'up' : chg < 0 ? 'down' : 'flat') + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%</td>'
+          + '<td class="' + (chg > 0 ? 'up' : chg < 0 ? 'down' : 'flat') + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%' + rankBadge + '</td>'
           + '<td style="color:#888;">' + margin + '</td>'
           + '</tr>';
       });
@@ -671,6 +674,12 @@
           });
 
           var top20 = list.slice(0, 20);
+          // store gainer rank for positions table (futures market only)
+          if (market === 'futures') {
+            posGainerRankMap = {};
+            top20.forEach(function(t, i){ posGainerRankMap[t.symbol] = i + 1; });
+            if (openPositions.length) renderPositions();
+          }
           var accentColor = isGainers ? '#4ade80' : '#f87171';
           var rows = top20.map(function(t, i) {
             var lbl = t.symbol.replace('USDT','');
