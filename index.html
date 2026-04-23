@@ -58,6 +58,20 @@
     /* Positions section */
     .section-label { max-width: 1100px; margin: 0 auto 0.5rem; font-size: 0.72rem; letter-spacing: 1.5px; text-transform: uppercase; color: #555; display: flex; align-items: center; gap: 0.5rem; }
     .section-label span { color: #f0b90b; }
+
+    /* Balance cards */
+    .balance-section { max-width: 1100px; margin: 0 auto 1.5rem; }
+    .balance-title { font-size: 0.72rem; letter-spacing: 1.5px; text-transform: uppercase; color: #555; margin-bottom: 0.7rem; display: flex; align-items: center; gap: 0.5rem; }
+    .balance-title span { color: #f0b90b; }
+    .balance-cards { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .bal-card { flex: 1; min-width: 180px; background: #0d1117; border: 1px solid #1e2d3d; border-radius: 10px; padding: 1rem 1.2rem; }
+    .bal-card .bal-label { font-size: 0.68rem; letter-spacing: 1px; text-transform: uppercase; color: #555; margin-bottom: 0.4rem; }
+    .bal-card .bal-usd { font-size: 1.2rem; font-weight: 700; font-family: monospace; color: #fff; }
+    .bal-card .bal-vnd { font-size: 0.78rem; font-family: monospace; color: #555; margin-top: 0.2rem; }
+    .bal-card.pnl-pos { border-color: #1e3a1e; }
+    .bal-card.pnl-pos .bal-usd { color: #4ade80; }
+    .bal-card.pnl-neg { border-color: #3a1a1a; }
+    .bal-card.pnl-neg .bal-usd { color: #f87171; }
     .pos-wrap { max-width: 1100px; margin: 0 auto 2rem; overflow-x: auto; border-radius: 8px; border: 1px solid #1e3a1e; }
     .pos-wrap::-webkit-scrollbar { height: 4px; }
     .pos-wrap::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 4px; }
@@ -88,6 +102,33 @@
   </header>
 
   <main>
+    <!-- ── Balance Cards ── -->
+    <div class="balance-section" id="balance-section" style="display:none">
+      <div class="balance-title"><span>💰 Futures Account Balance</span></div>
+      <div class="balance-cards">
+        <div class="bal-card" id="bal-margin">
+          <div class="bal-label">Margin Balance</div>
+          <div class="bal-usd" id="bal-margin-usd">--</div>
+          <div class="bal-vnd" id="bal-margin-vnd"></div>
+        </div>
+        <div class="bal-card" id="bal-wallet">
+          <div class="bal-label">Wallet Balance</div>
+          <div class="bal-usd" id="bal-wallet-usd">--</div>
+          <div class="bal-vnd" id="bal-wallet-vnd"></div>
+        </div>
+        <div class="bal-card" id="bal-upnl">
+          <div class="bal-label">Unrealized PnL</div>
+          <div class="bal-usd" id="bal-upnl-usd">--</div>
+          <div class="bal-vnd" id="bal-upnl-vnd"></div>
+        </div>
+        <div class="bal-card" id="bal-rpnl">
+          <div class="bal-label">Today's Realized PnL</div>
+          <div class="bal-usd" id="bal-rpnl-usd">--</div>
+          <div class="bal-vnd" id="bal-rpnl-vnd"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── My Futures Positions ── -->
     <div class="section-label" id="pos-label" style="display:none">
       <span>⚡ My Futures Positions</span>
@@ -177,6 +218,72 @@
       var url = baseUrl + path + '?' + qs + '&signature=' + sig;
       var res = await fetch(url, { headers: { 'X-MBX-APIKEY': BINANCE_API_KEY } });
       return res.json();
+    }
+
+    /* ── Fetch & render Balance ── */
+    var USD_VND = 25400; // fallback rate, will be updated from API
+
+    async function fetchUsdVnd() {
+      try {
+        var r = await fetch('https://open.er-api.com/v6/latest/USD');
+        if (r.ok) { var d = await r.json(); USD_VND = d.rates && d.rates.VND ? d.rates.VND : USD_VND; return; }
+      } catch(e) {}
+      USD_VND = 25400;
+    }
+
+    function fmtVnd(usd) {
+      var vnd = Math.round(parseFloat(usd) * USD_VND);
+      return '≈ ' + vnd.toLocaleString('vi-VN') + ' ₫';
+    }
+
+    function setPnlCard(cardId, usdId, vndId, value) {
+      var v   = parseFloat(value);
+      var el  = document.getElementById(cardId);
+      var uEl = document.getElementById(usdId);
+      var vEl = document.getElementById(vndId);
+      uEl.innerText = (v >= 0 ? '+' : '') + v.toFixed(2) + ' $';
+      vEl.innerText = fmtVnd(v);
+      el.className  = 'bal-card ' + (v > 0 ? 'pnl-pos' : v < 0 ? 'pnl-neg' : '');
+    }
+
+    async function loadBalance() {
+      if (!BINANCE_API_KEY || !BINANCE_SECRET_KEY) return;
+      try {
+        await fetchUsdVnd();
+        // /fapi/v2/account gives margin balance, wallet balance, unrealized PnL
+        var acct = await binanceAuth('https://fapi.binance.com', '/fapi/v2/account');
+        if (acct && acct.code) return; // error
+
+        var margin  = parseFloat(acct.totalMarginBalance   || 0);
+        var wallet  = parseFloat(acct.totalWalletBalance   || 0);
+        var upnl    = parseFloat(acct.totalUnrealizedProfit|| 0);
+
+        document.getElementById('bal-margin-usd').innerText = '$' + margin.toFixed(2);
+        document.getElementById('bal-margin-vnd').innerText = fmtVnd(margin);
+        document.getElementById('bal-wallet-usd').innerText = '$' + wallet.toFixed(2);
+        document.getElementById('bal-wallet-vnd').innerText = fmtVnd(wallet);
+        setPnlCard('bal-upnl', 'bal-upnl-usd', 'bal-upnl-vnd', upnl);
+
+        // Today's realized PnL from income history
+        var startOfDay = new Date(); startOfDay.setHours(0,0,0,0);
+        var income = await binanceAuth('https://fapi.binance.com', '/fapi/v1/income', {
+          incomeType: 'REALIZED_PNL',
+          startTime: startOfDay.getTime(),
+          limit: 1000
+        });
+        var todayPnl = 0;
+        if (Array.isArray(income)) {
+          income.forEach(function(i){ todayPnl += parseFloat(i.income || 0); });
+        }
+        setPnlCard('bal-rpnl', 'bal-rpnl-usd', 'bal-rpnl-vnd', todayPnl);
+
+        document.getElementById('balance-section').style.display = '';
+
+        // Refresh every 10s
+        setTimeout(loadBalance, 10000);
+      } catch(e) {
+        console.warn('Balance error:', e);
+      }
     }
 
     /* ── Fetch & render Futures Positions ── */
@@ -469,6 +576,7 @@
     loadRanking();
     initSnapshot(); // keep WS alive in background for potential future use
     loadPositions(); // load futures positions if API key is set
+    loadBalance();   // load balance cards if API key is set
   </script>
 
 </body>
