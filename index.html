@@ -196,6 +196,8 @@
             <th onclick="sortPos('leverage')" style="cursor:pointer;user-select:none;">Leverage <span class="sort-arrow" id="arr-leverage"></span></th>
             <th onclick="sortPos('chg24')"    style="cursor:pointer;user-select:none;">24h Chg % <span class="sort-arrow" id="arr-chg24"></span></th>
             <th onclick="sortPos('funding')"   style="cursor:pointer;user-select:none;">Funding <span class="sort-arrow" id="arr-funding"></span></th>
+            <th onclick="sortPos('opened')"    style="cursor:pointer;user-select:none;">Opened <span class="sort-arrow" id="arr-opened"></span></th>
+            <th onclick="sortPos('duration')"  style="cursor:pointer;user-select:none;">Duration <span class="sort-arrow" id="arr-duration"></span></th>
             <th style="text-align:center;">TP/SL</th>
             <th>Margin Type</th>
           </tr>
@@ -450,7 +452,9 @@
       },
       leverage: function(p){ return parseFloat(p.leverage); },
       chg24:    function(p){ return parseFloat(pos24hMap[p.symbol] || 0); },
-      funding:  function(p){ return fundingMap[p.symbol] ? fundingMap[p.symbol].rate : 0; }
+      funding:  function(p){ return fundingMap[p.symbol] ? fundingMap[p.symbol].rate : 0; },
+      opened:   function(p){ return posOpenTimeMap[p.symbol] || 0; },
+      duration: function(p){ return posOpenTimeMap[p.symbol] ? (Date.now() - posOpenTimeMap[p.symbol]) : 0; }
     };
 
     function sortPos(col) {
@@ -461,7 +465,7 @@
 
     function renderPositions() {
       // update arrows
-      ['size','entry','mark','liq','pnl','roe','leverage','chg24','funding'].forEach(function(c){
+      ['size','entry','mark','liq','pnl','roe','leverage','chg24','funding','opened','duration'].forEach(function(c){
         var el = document.getElementById('arr-'+c);
         if (!el) return;
         el.innerText = c === posSortCol ? (posSortAsc ? '↑' : '↓') : '';
@@ -513,11 +517,61 @@
                 + '<br><span style="font-size:0.72rem;color:#888;">(est: $' + feeAbs.toFixed(5) + ')</span>'
                 + '</td>';
             })()
+          + (function(){
+              var ts = posOpenTimeMap[p.symbol];
+              if (!ts) return '<td style="color:#555;">-</td><td style="color:#555;">-</td>';
+              var d  = new Date(ts);
+              var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+              var openedStr = d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear()
+                + '<br><span style="font-size:0.72rem;color:#888;">' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + '</span>';
+              var ms   = Date.now() - ts;
+              var days = Math.floor(ms / 86400000);
+              var hrs  = Math.floor((ms % 86400000) / 3600000);
+              var mins = Math.floor((ms % 3600000) / 60000);
+              var durStr = days > 0 ? days + 'd ' + hrs + 'h' : hrs > 0 ? hrs + 'h ' + mins + 'm' : mins + 'm';
+              return '<td style="color:#aaa;font-size:0.8rem;line-height:1.5;">' + openedStr + '</td>'
+                   + '<td style="color:#f0b90b;font-family:monospace;">' + durStr + '</td>';
+            })()
           + '<td style="text-align:center;font-weight:700;color:' + (tpMap[p.symbol] ? '#4ade80' : '#555') + ';">' + (tpMap[p.symbol] ? 'YES' : '-') + '</td>'
           + '<td style="color:#888;">' + margin + '</td>'
           + '</tr>';
       });
       document.getElementById('pos-body').innerHTML = rows.join('');
+    }
+
+    /* ── Fetch position open times from trade history ── */
+    async function loadPositionOpenTimes(positions) {
+      var toFetch = positions.filter(function(p){ return !posOpenTimeMap[p.symbol]; });
+      if (!toFetch.length) return;
+      for (var i = 0; i < toFetch.length; i++) {
+        var p   = toFetch[i];
+        var amt = parseFloat(p.positionAmt);
+        var isLong = amt > 0;
+        var targetQty = Math.abs(amt);
+        try {
+          var trades = await binanceAuth('https://fapi.binance.com', '/fapi/v1/userTrades', {
+            symbol: p.symbol, limit: 500
+          });
+          if (!Array.isArray(trades) || !trades.length) continue;
+          // sort newest-first
+          trades.sort(function(a, b){ return b.time - a.time; });
+          // only trades that build (not reduce) the current position
+          var addTrades = trades.filter(function(t){
+            return isLong
+              ? (t.side === 'BUY'  && t.positionSide === 'LONG')
+              : (t.side === 'SELL' && t.positionSide === 'SHORT');
+          });
+          var accumulated = 0;
+          var openTime = null;
+          for (var j = 0; j < addTrades.length; j++) {
+            accumulated += parseFloat(addTrades[j].qty);
+            openTime = addTrades[j].time;
+            if (accumulated >= targetQty - 0.000001) break;
+          }
+          if (openTime) posOpenTimeMap[p.symbol] = openTime;
+        } catch(e) { /* skip */ }
+      }
+      renderPositions();
     }
 
     /* ── Refresh Future Pos column in ranking table without re-fetching ── */
@@ -573,6 +627,9 @@
           })
           .catch(function(){ renderPositions(); });
 
+        // fetch open time for new symbols not yet cached
+        loadPositionOpenTimes(open);
+
         // fetch open orders to check TP status
         binanceAuth('https://fapi.binance.com', '/fapi/v1/openOrders')
           .then(function(orders){
@@ -623,6 +680,7 @@
     var defaultTpTarget         = parseFloat(localStorage.getItem('tpTarget')    || '0.3');
     var tpMap                   = {}; // symbol -> true if TP order exists
     var fundingMap              = {}; // symbol -> { rate, intervalHours }
+    var posOpenTimeMap          = {}; // symbol -> open timestamp (ms), fetched once per session
 
     /* ── Tab switcher ── */
     function switchTab(tab, btn) {
