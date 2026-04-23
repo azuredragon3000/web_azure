@@ -436,7 +436,7 @@
       var isPosHist = tab === 'poshistory';
       document.getElementById('ranking-wrap').style.display  = isPosHist ? 'none' : '';
       document.getElementById('subtabs').style.display       = isPosHist ? 'none' : '';
-      document.getElementById('pos-hist-wrap').style.display = isPosHist ? ''     : 'none';
+      document.getElementById('pos-hist-wrap').style.display = isPosHist ? 'block' : 'none';
 
       if (isPosHist) {
         document.getElementById('table-title').innerText = '📋 Position History';
