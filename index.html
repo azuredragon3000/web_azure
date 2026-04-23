@@ -97,6 +97,19 @@
 
     .sort-arrow { font-size: 0.7rem; color: #f0b90b; margin-left: 2px; }
 
+    /* Config modal */
+    #config-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:2000; align-items:center; justify-content:center; }
+    #config-overlay.open { display:flex; }
+    #config-box { background:#1a1a2e; border:1px solid #2a2a4a; border-radius:12px; padding:2rem; width:360px; max-width:90vw; }
+    #config-box h3 { color:#f0b90b; font-size:1rem; letter-spacing:1px; text-transform:uppercase; margin-bottom:1.2rem; }
+    .cfg-row { margin-bottom:1rem; }
+    .cfg-row label { display:block; font-size:0.72rem; letter-spacing:1px; color:#888; text-transform:uppercase; margin-bottom:0.4rem; }
+    .cfg-row input { width:100%; padding:0.5rem 0.8rem; background:#0f0f0f; border:1px solid #2a2a4a; border-radius:6px; color:#f0f0f0; font-size:0.95rem; font-family:monospace; }
+    .cfg-row input:focus { outline:none; border-color:#f0b90b; }
+    .cfg-btns { display:flex; gap:0.6rem; margin-top:1.4rem; }
+    .cfg-save { flex:1; padding:0.5rem; background:#f0b90b; color:#0f0f0f; border:none; border-radius:6px; font-weight:700; font-size:0.88rem; cursor:pointer; }
+    .cfg-close { padding:0.5rem 1rem; background:transparent; color:#888; border:1px solid #2a2a4a; border-radius:6px; font-size:0.88rem; cursor:pointer; }
+
     footer { background: #1a1a2e; text-align: center; padding: 1rem; color: #555; font-size: 0.8rem; border-top: 1px solid #2a2a4a; }
     footer a { color: #e94560; text-decoration: none; }
   </style>
@@ -108,7 +121,7 @@
     <nav>
       <a href="#">Home</a>
       <a href="#">About</a>
-      <a href="#">Projects</a>
+      <a href="#" onclick="openConfig();return false;">Config</a>
       <a href="#">Contact</a>
     </nav>
   </header>
@@ -165,6 +178,7 @@
             <th onclick="sortPos('roe')"      style="cursor:pointer;user-select:none;">ROE % <span class="sort-arrow" id="arr-roe"></span></th>
             <th onclick="sortPos('leverage')" style="cursor:pointer;user-select:none;">Leverage <span class="sort-arrow" id="arr-leverage"></span></th>
             <th onclick="sortPos('chg24')"    style="cursor:pointer;user-select:none;">24h Chg % <span class="sort-arrow" id="arr-chg24"></span></th>
+            <th style="text-align:center;">TP/SL</th>
             <th>Margin Type</th>
           </tr>
         </thead>
@@ -231,6 +245,25 @@
   <footer>
     <p>Data from Binance &nbsp;·&nbsp; Hosted on <a href="https://pages.github.com" target="_blank">GitHub Pages</a></p>
   </footer>
+
+  <!-- Config Modal -->
+  <div id="config-overlay" onclick="if(event.target===this)closeConfig();">
+    <div id="config-box">
+      <h3>⚙️ Config</h3>
+      <div class="cfg-row">
+        <label>Default Short Margin (USD)</label>
+        <input type="number" id="cfg-margin" min="0.5" step="0.5" value="1" />
+      </div>
+      <div class="cfg-row">
+        <label>Auto TP Target Profit (USDT)</label>
+        <input type="number" id="cfg-tp" min="0.01" step="0.1" value="0.3" />
+      </div>
+      <div class="cfg-btns">
+        <button class="cfg-save" onclick="saveConfig()">Save</button>
+        <button class="cfg-close" onclick="closeConfig()">Close</button>
+      </div>
+    </div>
+  </div>
 
   <script>
     /* ════════════════════════════════════════
@@ -416,6 +449,7 @@
           + '<td class="' + (roe >= 0 ? 'up' : 'down') + '">' + (roe >= 0 ? '+' : '') + roe.toFixed(2) + '%</td>'
           + '<td>' + lev + 'x</td>'
           + '<td class="' + (chg > 0 ? 'up' : chg < 0 ? 'down' : 'flat') + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%' + rankBadge + '</td>'
+          + '<td style="text-align:center;font-weight:700;color:' + (tpMap[p.symbol] ? '#4ade80' : '#555') + ';">' + (tpMap[p.symbol] ? 'YES' : '-') + '</td>'
           + '<td style="color:#888;">' + margin + '</td>'
           + '</tr>';
       });
@@ -474,6 +508,20 @@
             renderPositions();
           })
           .catch(function(){ renderPositions(); });
+
+        // fetch open orders to check TP status
+        binanceAuth('https://fapi.binance.com', '/fapi/v1/openOrders')
+          .then(function(orders){
+            tpMap = {};
+            if (Array.isArray(orders)) {
+              orders.forEach(function(o){
+                if (o.type === 'TAKE_PROFIT' || o.type === 'TAKE_PROFIT_MARKET')
+                  tpMap[o.symbol] = true;
+              });
+            }
+            renderPositions();
+          })
+          .catch(function(){});
         renderPositions();
         document.getElementById('pos-count').innerText = '(' + open.length + ' open)';
         document.getElementById('pos-wrap').style.display  = '';
@@ -507,6 +555,9 @@
     var openPositionSymbols     = new Set();
     var currentAvailableBalance = 0;
     var shortStatuses           = {}; // symbol -> { state, msg, orderId }
+    var defaultShortMargin      = parseFloat(localStorage.getItem('shortMargin') || '1');
+    var defaultTpTarget         = parseFloat(localStorage.getItem('tpTarget')    || '0.3');
+    var tpMap                   = {}; // symbol -> true if TP order exists
 
     /* ── Tab switcher ── */
     function switchTab(tab, btn) {
@@ -683,22 +734,47 @@
       el.innerHTML   = msg;
     }
 
+    async function autoSetTP(symbol, avgPrice, execQty) {
+      var ei       = exInfoCache.futures && exInfoCache.futures[symbol];
+      var tickSize = (ei && ei.tick && ei.tick !== '--') ? ei.tick : 0.01;
+      var tpPrice  = parseFloat(avgPrice) - (defaultTpTarget / parseFloat(execQty));
+      tpPrice = (Math.round(tpPrice / tickSize) * tickSize).toFixed(countDecimals(tickSize));
+      try {
+        var r = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/order', {
+          symbol: symbol, side: 'BUY', positionSide: 'SHORT',
+          type: 'TAKE_PROFIT_MARKET', stopPrice: tpPrice,
+          closePosition: 'true', workingType: 'MARK_PRICE', priceProtect: 'true'
+        });
+        if (r.orderId) {
+          tpMap[symbol] = true;
+          setShortStatus(symbol, 'FILLED', 'Filled + TP @$' + tpPrice);
+          renderPositions();
+        } else {
+          setShortStatus(symbol, 'FILLED', 'Filled (TP err: ' + (r.msg || '?') + ')');
+        }
+      } catch(e) { setShortStatus(symbol, 'FILLED', 'Filled (TP err)'); }
+    }
+
     async function pollOrder(symbol, orderId) {
       try {
         var o = await binanceAuth('https://fapi.binance.com', '/fapi/v1/order', { symbol: symbol, orderId: orderId });
-        if (o.status === 'FILLED')  { setShortStatus(symbol, 'FILLED', 'Filled &#10003;'); return; }
+        if (o.status === 'FILLED') {
+          setShortStatus(symbol, 'FILLED', 'Filled — setting TP...');
+          await autoSetTP(symbol, o.avgPrice, o.executedQty);
+          return;
+        }
         if (['CANCELED','EXPIRED','REJECTED'].indexOf(o.status) !== -1) { setShortStatus(symbol, 'ERR', o.status); return; }
         setTimeout(function(){ pollOrder(symbol, orderId); }, 3000);
       } catch(e) { setTimeout(function(){ pollOrder(symbol, orderId); }, 5000); }
     }
 
     async function placeShort(symbol, price) {
-      if (currentAvailableBalance < 1) { setShortStatus(symbol, 'ERR', 'Avbl < $1'); return; }
+      if (currentAvailableBalance < defaultShortMargin) { setShortStatus(symbol, 'ERR', 'Avbl < $' + defaultShortMargin); return; }
       var ei       = exInfoCache.futures && exInfoCache.futures[symbol];
       var stepSize = (ei && ei.step) ? ei.step : 0.001;
       var tickSize = (ei && ei.tick && ei.tick !== '--') ? ei.tick : 0.01;
-      var margin   = 1;
-      var notional = 6;
+      var margin   = defaultShortMargin;
+      var notional = margin * 6;
       var lev      = Math.min(Math.max(Math.ceil(notional / margin), 1), 125);
       var qty      = (Math.floor(notional / price / stepSize) * stepSize).toFixed(countDecimals(stepSize));
       var limitPx  = (Math.round(price / tickSize) * tickSize).toFixed(countDecimals(tickSize));
@@ -717,6 +793,22 @@
         setShortStatus(symbol, 'PENDING', 'Pending #' + order.orderId);
         pollOrder(symbol, order.orderId);
       } catch(e) { setShortStatus(symbol, 'ERR', e.message || 'Error'); }
+    }
+
+    function openConfig() {
+      document.getElementById('cfg-margin').value = defaultShortMargin;
+      document.getElementById('cfg-tp').value = defaultTpTarget;
+      document.getElementById('config-overlay').classList.add('open');
+    }
+    function closeConfig() {
+      document.getElementById('config-overlay').classList.remove('open');
+    }
+    function saveConfig() {
+      defaultShortMargin = parseFloat(document.getElementById('cfg-margin').value) || 1;
+      defaultTpTarget    = parseFloat(document.getElementById('cfg-tp').value) || 0.3;
+      localStorage.setItem('shortMargin', defaultShortMargin);
+      localStorage.setItem('tpTarget', defaultTpTarget);
+      closeConfig();
     }
 
     function loadRanking() {
