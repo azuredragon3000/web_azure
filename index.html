@@ -6,167 +6,51 @@
   <title>Crypto Prices</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      background: #0f0f0f;
-      color: #f0f0f0;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    header {
-      background: #1a1a2e;
-      padding: 1rem 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 2px solid #e94560;
-    }
-
+    body { font-family: 'Segoe UI', sans-serif; background: #0f0f0f; color: #f0f0f0; min-height: 100vh; display: flex; flex-direction: column; }
+    header { background: #1a1a2e; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e94560; }
     header .logo { font-size: 1.5rem; font-weight: bold; color: #e94560; }
-
-    nav a {
-      color: #f0f0f0;
-      text-decoration: none;
-      margin-left: 1.5rem;
-      font-size: 0.95rem;
-      transition: color 0.2s;
-    }
-
+    nav a { color: #f0f0f0; text-decoration: none; margin-left: 1.5rem; font-size: 0.95rem; transition: color 0.2s; }
     nav a:hover { color: #e94560; }
 
-    main {
-      flex: 1;
-      padding: 2.5rem 1.5rem;
-      background: linear-gradient(135deg, #1a1a2e 0%, #0f0f0f 100%);
-    }
+    main { flex: 1; padding: 2rem 1.5rem; background: linear-gradient(135deg, #1a1a2e 0%, #0f0f0f 100%); }
 
-    .table-header {
-      display: flex;
-      align-items: center;
-      gap: 0.8rem;
-      max-width: 700px;
-      margin: 0 auto 1.2rem;
-    }
+    .row { display: flex; align-items: center; gap: 0.6rem; max-width: 700px; margin: 0 auto 0.8rem; flex-wrap: wrap; }
 
-    .table-header h2 {
-      font-size: 1.1rem;
-      font-weight: 600;
-      color: #f0b90b;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-    }
+    .live-dot { width: 8px; height: 8px; background: #4ade80; border-radius: 50%; animation: pulse 1.5s infinite; flex-shrink: 0; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
-    .live-dot {
-      width: 8px; height: 8px;
-      background: #4ade80;
-      border-radius: 50%;
-      animation: pulse 1.5s infinite;
-    }
+    h2 { font-size: 1rem; font-weight: 600; color: #f0b90b; letter-spacing: 1px; text-transform: uppercase; }
+    .update-time { font-size: 0.72rem; color: #555; margin-left: auto; }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.3; }
-    }
-
-    .update-time { font-size: 0.75rem; color: #555; margin-left: auto; }
-
-    /* Tabs */
-    .tabs {
-      display: flex;
-      gap: 0.4rem;
-      max-width: 700px;
-      margin: 0 auto 1.2rem;
-    }
-
-    .tab-btn {
-      padding: 0.45rem 1.2rem;
-      border-radius: 20px;
-      border: 1px solid #2a2a4a;
-      background: transparent;
-      color: #888;
-      font-size: 0.82rem;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .tab-btn.active {
-      background: #e94560;
-      border-color: #e94560;
-      color: #fff;
-      font-weight: 600;
-    }
-
+    .tabs { display: flex; gap: 0.4rem; max-width: 700px; margin: 0 auto 0.5rem; flex-wrap: wrap; }
+    .tab-btn { padding: 0.4rem 1.1rem; border-radius: 20px; border: 1px solid #2a2a4a; background: transparent; color: #888; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; }
+    .tab-btn.active { background: #e94560; border-color: #e94560; color: #fff; font-weight: 600; }
     .tab-btn:hover:not(.active) { border-color: #555; color: #ccc; }
 
-    table {
-      width: 100%;
-      max-width: 700px;
-      margin: 0 auto;
-      border-collapse: collapse;
-    }
+    .subtabs { display: none; gap: 0.3rem; max-width: 700px; margin: 0 auto 0.8rem; }
+    .subtabs.show { display: flex; }
+    .subtab-btn { padding: 0.3rem 0.9rem; border-radius: 20px; border: 1px solid #2a2a4a; background: transparent; color: #888; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; }
+    .subtab-btn.active { background: #0f3460; border-color: #4ade80; color: #4ade80; }
 
-    thead th {
-      text-align: left;
-      padding: 0.75rem 1rem;
-      font-size: 0.75rem;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      color: #555;
-      border-bottom: 1px solid #2a2a4a;
-    }
-
+    table { width: 100%; max-width: 700px; margin: 0 auto; border-collapse: collapse; }
+    thead th { text-align: left; padding: 0.7rem 1rem; font-size: 0.72rem; letter-spacing: 1.5px; text-transform: uppercase; color: #555; border-bottom: 1px solid #2a2a4a; }
     thead th:not(:first-child) { text-align: right; }
-
-    tbody tr {
-      border-bottom: 1px solid #1a1a2e;
-      transition: background 0.15s;
-    }
-
+    tbody tr { border-bottom: 1px solid #1a1a2e; transition: background 0.15s; }
     tbody tr:hover { background: #1a1a2e; }
-
-    tbody td { padding: 0.85rem 1rem; font-size: 0.95rem; }
+    tbody td { padding: 0.8rem 1rem; font-size: 0.95rem; }
 
     .coin-cell { display: flex; align-items: center; gap: 0.6rem; }
-
-    .coin-icon {
-      width: 28px; height: 28px;
-      border-radius: 50%;
-      background: #2a2a4a;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 0.65rem; font-weight: bold; color: #f0b90b;
-      flex-shrink: 0;
-    }
-
+    .coin-icon { width: 28px; height: 28px; border-radius: 50%; background: #2a2a4a; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: bold; color: #f0b90b; flex-shrink: 0; }
     .coin-symbol { font-weight: 600; color: #fff; }
-    .coin-name   { font-size: 0.75rem; color: #555; }
+    .coin-name { font-size: 0.72rem; color: #555; }
 
-    td.price {
-      text-align: right;
-      font-family: monospace;
-      font-size: 1rem;
-      font-weight: 600;
-      color: #fff;
-      transition: color 0.5s;
-    }
-
+    td.price { text-align: right; font-family: monospace; font-size: 1rem; font-weight: 600; color: #fff; transition: color 0.5s; }
     td.chg { text-align: right; font-family: monospace; font-weight: 600; font-size: 0.9rem; }
-
     .up   { color: #4ade80; }
     .down { color: #f87171; }
     .flat { color: #888; }
 
-    footer {
-      background: #1a1a2e;
-      text-align: center;
-      padding: 1rem;
-      color: #555;
-      font-size: 0.8rem;
-      border-top: 1px solid #2a2a4a;
-    }
-
+    footer { background: #1a1a2e; text-align: center; padding: 1rem; color: #555; font-size: 0.8rem; border-top: 1px solid #2a2a4a; }
     footer a { color: #e94560; text-decoration: none; }
   </style>
 </head>
@@ -183,16 +67,21 @@
   </header>
 
   <main>
-    <div class="table-header">
+    <div class="row">
       <span class="live-dot"></span>
       <h2 id="table-title">Watchlist</h2>
       <span class="update-time" id="update-time">Connecting...</span>
     </div>
 
     <div class="tabs">
-      <button class="tab-btn active" onclick="switchTab('watchlist', this)">⭐ Watchlist</button>
-      <button class="tab-btn" onclick="switchTab('gainers', this)">🚀 Top Gainers</button>
-      <button class="tab-btn" onclick="switchTab('losers', this)">📉 Top Losers</button>
+      <button class="tab-btn active" onclick="switchTab('watchlist',this)">⭐ Watchlist</button>
+      <button class="tab-btn" onclick="switchTab('gainers',this)">🚀 Gainers</button>
+      <button class="tab-btn" onclick="switchTab('losers',this)">📉 Losers</button>
+    </div>
+
+    <div class="subtabs" id="subtabs">
+      <button class="subtab-btn" onclick="switchMarket('spot',this)">Spot</button>
+      <button class="subtab-btn active" onclick="switchMarket('futures',this)">Futures</button>
     </div>
 
     <table>
@@ -203,7 +92,7 @@
           <th>24h Chg %</th>
         </tr>
       </thead>
-      <tbody id="coin-table-body">
+      <tbody id="table-body">
         <tr><td colspan="3" style="text-align:center;color:#555;padding:2rem;">Loading...</td></tr>
       </tbody>
     </table>
@@ -217,108 +106,96 @@
     /* ── Helpers ── */
     function fmtPrice(p) {
       p = parseFloat(p);
-      if (p >= 1000) return '$' + p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      if (p >= 1000) return '$' + p.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
       if (p >= 1)    return '$' + p.toFixed(4);
       return '$' + p.toFixed(6);
     }
+    function fmtChg(c) { var v=parseFloat(c); return (v>=0?'+':'') + v.toFixed(2)+'%'; }
+    function chgClass(c) { var v=parseFloat(c); return v>0?'up':v<0?'down':'flat'; }
 
-    function fmtChg(c) {
-      var v = parseFloat(c);
-      return (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
-    }
+    /* ── State ── */
+    var currentTab    = 'watchlist';
+    var currentMarket = 'futures';  // default Futures to match Binance app default
 
-    function chgClass(c) {
-      var v = parseFloat(c);
-      return v > 0 ? 'up' : v < 0 ? 'down' : 'flat';
-    }
-
-    function coinRow(symbol, price, chg, rowId) {
-      var label = symbol.replace('USDT', '');
-      return '<tr id="' + (rowId || '') + '">'
-        + '<td><div class="coin-cell">'
-        +   '<div class="coin-icon">' + label.substring(0, 4) + '</div>'
-        +   '<div><div class="coin-symbol">' + label + '</div>'
-        +       '<div class="coin-name">/ USDT</div></div>'
-        + '</div></td>'
-        + '<td class="price">' + fmtPrice(price) + '</td>'
-        + '<td class="chg ' + chgClass(chg) + '">' + fmtChg(chg) + '</td>'
-        + '</tr>';
-    }
-
-    /* ── Tab state ── */
-    var currentTab = 'watchlist';
-
+    /* ── Tab switcher ── */
     function switchTab(tab, btn) {
       currentTab = tab;
-      document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+      document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
       btn.classList.add('active');
 
-      var titles = { watchlist: 'Watchlist', gainers: '🚀 Top Gainers', losers: '📉 Top Losers' };
-      document.getElementById('table-title').innerText = titles[tab];
-
+      var subtabs = document.getElementById('subtabs');
       if (tab === 'watchlist') {
+        subtabs.classList.remove('show');
+        document.getElementById('table-title').innerText = 'Watchlist';
         buildWatchlist();
       } else {
-        loadRanking(tab);
+        subtabs.classList.add('show');
+        document.getElementById('table-title').innerText = tab === 'gainers' ? '🚀 Top Gainers' : '📉 Top Losers';
+        loadRanking();
       }
     }
 
-    /* ── WATCHLIST (WebSocket) ── */
+    function switchMarket(market, btn) {
+      currentMarket = market;
+      document.querySelectorAll('.subtab-btn').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      loadRanking();
+    }
+
+    /* ── WATCHLIST ── */
     var COINS = [
-      { symbol: 'BTCUSDT',  name: 'Bitcoin'   },
-      { symbol: 'ETHUSDT',  name: 'Ethereum'  },
-      { symbol: 'BNBUSDT',  name: 'BNB'       },
-      { symbol: 'SOLUSDT',  name: 'Solana'    },
-      { symbol: 'XRPUSDT',  name: 'XRP'       },
-      { symbol: 'ADAUSDT',  name: 'Cardano'   },
-      { symbol: 'DOGEUSDT', name: 'Dogecoin'  },
-      { symbol: 'AVAXUSDT', name: 'Avalanche' },
-      { symbol: 'DOTUSDT',  name: 'Polkadot'  },
-      { symbol: 'LINKUSDT', name: 'Chainlink' }
+      { symbol:'BTCUSDT',  name:'Bitcoin'   },
+      { symbol:'ETHUSDT',  name:'Ethereum'  },
+      { symbol:'BNBUSDT',  name:'BNB'       },
+      { symbol:'SOLUSDT',  name:'Solana'    },
+      { symbol:'XRPUSDT',  name:'XRP'       },
+      { symbol:'ADAUSDT',  name:'Cardano'   },
+      { symbol:'DOGEUSDT', name:'Dogecoin'  },
+      { symbol:'AVAXUSDT', name:'Avalanche' },
+      { symbol:'DOTUSDT',  name:'Polkadot'  },
+      { symbol:'LINKUSDT', name:'Chainlink' }
     ];
 
     var wState = {};
-    COINS.forEach(function(c) { wState[c.symbol] = { price: null, chg: null, prev: null }; });
+    COINS.forEach(function(c){ wState[c.symbol] = {price:null, chg:null, prev:null}; });
 
     function buildWatchlist() {
       var rows = COINS.map(function(coin) {
         var s = wState[coin.symbol];
-        return '<tr id="row-' + coin.symbol + '">'
+        var lbl = coin.symbol.replace('USDT','');
+        return '<tr>'
           + '<td><div class="coin-cell">'
-          +   '<div class="coin-icon">' + coin.symbol.replace('USDT','').substring(0,4) + '</div>'
-          +   '<div><div class="coin-symbol">' + coin.symbol.replace('USDT','') + '</div>'
-          +       '<div class="coin-name">' + coin.name + '</div></div>'
+          +   '<div class="coin-icon">' + lbl.substring(0,4) + '</div>'
+          +   '<div><div class="coin-symbol">' + lbl + '</div><div class="coin-name">' + coin.name + '</div></div>'
           + '</div></td>'
-          + '<td class="price" id="p-' + coin.symbol + '">' + (s.price ? fmtPrice(s.price) : '--') + '</td>'
-          + '<td class="chg ' + (s.chg ? chgClass(s.chg) : 'flat') + '" id="c-' + coin.symbol + '">' + (s.chg ? fmtChg(s.chg) : '--') + '</td>'
+          + '<td class="price" id="p-'+coin.symbol+'">' + (s.price ? fmtPrice(s.price) : '--') + '</td>'
+          + '<td class="chg '+(s.chg?chgClass(s.chg):'flat')+'" id="c-'+coin.symbol+'">' + (s.chg?fmtChg(s.chg):'--') + '</td>'
           + '</tr>';
       });
-      document.getElementById('coin-table-body').innerHTML = rows.join('');
+      document.getElementById('table-body').innerHTML = rows.join('');
     }
 
-    function updateWatchlistCell(symbol, price, chg) {
+    function updateCell(symbol, price, chg) {
       var s = wState[symbol];
       s.chg = chg;
       if (currentTab !== 'watchlist') { s.price = price; s.prev = price; return; }
-
-      var priceEl = document.getElementById('p-' + symbol);
-      var chgEl   = document.getElementById('c-' + symbol);
-      if (!priceEl) return;
-
+      var pEl = document.getElementById('p-'+symbol);
+      var cEl = document.getElementById('c-'+symbol);
+      if (!pEl) return;
       if (s.prev !== null && price !== s.prev) {
-        priceEl.className = 'price ' + (price > s.prev ? 'up' : 'down');
-        setTimeout(function() { priceEl.className = 'price'; }, 700);
+        pEl.className = 'price ' + (price > s.prev ? 'up' : 'down');
+        setTimeout(function(){ pEl.className = 'price'; }, 700);
       }
       s.prev = price; s.price = price;
-      priceEl.innerText   = fmtPrice(price);
-      chgEl.className     = 'chg ' + chgClass(chg);
-      chgEl.innerText     = fmtChg(chg);
+      pEl.innerText = fmtPrice(price);
+      cEl.className = 'chg ' + chgClass(chg);
+      cEl.innerText = fmtChg(chg);
     }
 
     var ws;
     function connectWS() {
-      var streams = COINS.map(function(c) { return c.symbol.toLowerCase() + '@ticker'; }).join('/');
-      ws = new WebSocket('wss://stream.binance.com:9443/stream?streams=' + streams);
+      var streams = COINS.map(function(c){ return c.symbol.toLowerCase()+'@ticker'; }).join('/');
+      ws = new WebSocket('wss://stream.binance.com:9443/stream?streams='+streams);
       ws.onopen = function() {
         document.getElementById('update-time').innerText = 'Live ●';
         document.getElementById('update-time').style.color = '#4ade80';
@@ -326,9 +203,9 @@
       ws.onmessage = function(evt) {
         var d = JSON.parse(evt.data).data;
         if (!d) return;
-        updateWatchlistCell(d.s, parseFloat(d.c), d.P);
+        updateCell(d.s, parseFloat(d.c), d.P);
         if (currentTab === 'watchlist')
-          document.getElementById('update-time').innerText = 'Live · ' + new Date().toLocaleTimeString();
+          document.getElementById('update-time').innerText = 'Live · '+new Date().toLocaleTimeString();
       };
       ws.onerror = ws.onclose = function() {
         document.getElementById('update-time').style.color = '#555';
@@ -338,183 +215,80 @@
     }
 
     function initSnapshot() {
-      var symbols = JSON.stringify(COINS.map(function(c) { return c.symbol; }));
-      fetch('https://api.binance.com/api/v3/ticker/24hr?symbols=' + encodeURIComponent(symbols))
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          data.forEach(function(t) { updateWatchlistCell(t.symbol, parseFloat(t.lastPrice), t.priceChangePercent); });
+      var symbols = JSON.stringify(COINS.map(function(c){ return c.symbol; }));
+      fetch('https://api.binance.com/api/v3/ticker/24hr?symbols='+encodeURIComponent(symbols))
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+          data.forEach(function(t){ updateCell(t.symbol, parseFloat(t.lastPrice), t.priceChangePercent); });
           connectWS();
         })
-        .catch(function() { connectWS(); });
+        .catch(function(){ connectWS(); });
     }
 
-    /* ── TOP GAINERS / LOSERS ── */
-    function loadRanking(tab) {
+    /* ── GAINERS / LOSERS (Spot or Futures) ── */
+    var STABLES = ['USDCUSDT','BUSDUSDT','TUSDUSDT','FDUSDUSDT','USDPUSDT','DAIUSDT','EURUSDT','GBPUSDT','AEURUSDT'];
+
+    function loadRanking() {
+      var isGainers = currentTab === 'gainers';
       document.getElementById('update-time').innerText = 'Loading...';
       document.getElementById('update-time').style.color = '#555';
-      document.getElementById('coin-table-body').innerHTML =
-        '<tr><td colspan="3" style="text-align:center;color:#555;padding:2rem;">Fetching all USDT pairs...</td></tr>';
+      document.getElementById('table-body').innerHTML =
+        '<tr><td colspan="3" style="text-align:center;color:#555;padding:2rem;">Fetching data...</td></tr>';
 
-      // Fetch all 24hr tickers, filter USDT pairs, sort
-      fetch('https://api.binance.com/api/v3/ticker/24hr')
-        .then(function(r) { return r.json(); })
+      var url = currentMarket === 'futures'
+        ? 'https://fapi.binance.com/fapi/v1/ticker/24hr'          // Futures (USDT-M)
+        : 'https://api.binance.com/api/v3/ticker/24hr';            // Spot
+
+      fetch(url)
+        .then(function(r){ return r.json(); })
         .then(function(data) {
-          // Only USDT pairs, exclude stablecoin pairs
-          var STABLES = ['USDCUSDT','BUSDUSDT','TUSDUSDT','FDUSDUSDT','USDPUSDT','DAIUSDT','EURUSDT','GBPUSDT','AEURUSDT'];
-          var filtered = data.filter(function(t) {
-            return t.symbol.endsWith('USDT') && STABLES.indexOf(t.symbol) === -1;
-          });
+          var list;
+          if (currentMarket === 'futures') {
+            // Futures: field names are lastPrice / priceChangePercent
+            list = data.filter(function(t){
+              return t.symbol.endsWith('USDT') && STABLES.indexOf(t.symbol) === -1;
+            });
+            list.sort(function(a,b){
+              var diff = parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent);
+              return isGainers ? diff : -diff;
+            });
+          } else {
+            list = data.filter(function(t){
+              return t.symbol.endsWith('USDT') && STABLES.indexOf(t.symbol) === -1;
+            });
+            list.sort(function(a,b){
+              var diff = parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent);
+              return isGainers ? diff : -diff;
+            });
+          }
 
-          filtered.sort(function(a, b) {
-            var diff = parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent);
-            return tab === 'gainers' ? diff : -diff;
-          });
-
-          var top20 = filtered.slice(0, 20);
+          var top20 = list.slice(0, 20);
+          var accentColor = isGainers ? '#4ade80' : '#f87171';
           var rows = top20.map(function(t, i) {
+            var lbl = t.symbol.replace('USDT','');
             return '<tr>'
               + '<td><div class="coin-cell">'
-              +   '<div class="coin-icon" style="color:' + (tab==='gainers'?'#4ade80':'#f87171') + '">'
-              +     (i + 1)
-              +   '</div>'
-              +   '<div><div class="coin-symbol">' + t.symbol.replace('USDT','') + '</div>'
-              +       '<div class="coin-name">/ USDT</div></div>'
+              +   '<div class="coin-icon" style="color:'+accentColor+';font-size:0.75rem;">'+(i+1)+'</div>'
+              +   '<div><div class="coin-symbol">'+lbl+'</div><div class="coin-name">/ USDT</div></div>'
               + '</div></td>'
-              + '<td class="price">' + fmtPrice(t.lastPrice) + '</td>'
-              + '<td class="chg ' + chgClass(t.priceChangePercent) + '">' + fmtChg(t.priceChangePercent) + '</td>'
+              + '<td class="price">'+fmtPrice(t.lastPrice)+'</td>'
+              + '<td class="chg '+chgClass(t.priceChangePercent)+'">'+fmtChg(t.priceChangePercent)+'</td>'
               + '</tr>';
           });
 
-          document.getElementById('coin-table-body').innerHTML = rows.join('');
-          document.getElementById('update-time').innerText = 'Updated ' + new Date().toLocaleTimeString();
+          document.getElementById('table-body').innerHTML = rows.join('');
+          var market = currentMarket === 'futures' ? 'Futures' : 'Spot';
+          document.getElementById('update-time').innerText = market + ' · ' + new Date().toLocaleTimeString();
           document.getElementById('update-time').style.color = '#555';
         })
         .catch(function() {
-          document.getElementById('coin-table-body').innerHTML =
-            '<tr><td colspan="3" style="text-align:center;color:#f87171;padding:2rem;">Failed to load data</td></tr>';
+          document.getElementById('table-body').innerHTML =
+            '<tr><td colspan="3" style="text-align:center;color:#f87171;padding:2rem;">Failed to load — try again</td></tr>';
         });
     }
 
     /* ── Init ── */
     buildWatchlist();
-    initSnapshot();
-  </script>
-
-</body>
-</html>
-      { symbol: 'BTCUSDT',  name: 'Bitcoin',   icon: 'BTC'  },
-      { symbol: 'ETHUSDT',  name: 'Ethereum',  icon: 'ETH'  },
-      { symbol: 'BNBUSDT',  name: 'BNB',       icon: 'BNB'  },
-      { symbol: 'SOLUSDT',  name: 'Solana',    icon: 'SOL'  },
-      { symbol: 'XRPUSDT',  name: 'XRP',       icon: 'XRP'  },
-      { symbol: 'ADAUSDT',  name: 'Cardano',   icon: 'ADA'  },
-      { symbol: 'DOGEUSDT', name: 'Dogecoin',  icon: 'DOGE' },
-      { symbol: 'AVAXUSDT', name: 'Avalanche', icon: 'AVAX' },
-      { symbol: 'DOTUSDT',  name: 'Polkadot',  icon: 'DOT'  },
-      { symbol: 'LINKUSDT', name: 'Chainlink', icon: 'LINK' }
-    ];
-
-    // state map: symbol -> { price, chg }
-    var state = {};
-    COINS.forEach(function(c) { state[c.symbol] = { price: null, chg: null, prev: null }; });
-
-    function fmtPrice(p) {
-      if (p >= 1000) return '$' + p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      if (p >= 1)    return '$' + p.toFixed(4);
-      return '$' + p.toFixed(6);
-    }
-
-    function fmtChg(c) {
-      var v = parseFloat(c);
-      return (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
-    }
-
-    function chgClass(c) {
-      var v = parseFloat(c);
-      return v > 0 ? 'up' : v < 0 ? 'down' : 'flat';
-    }
-
-    // Build table rows once (initial render)
-    function buildTable() {
-      var rows = COINS.map(function(coin) {
-        return '<tr id="row-' + coin.symbol + '">'
-          + '<td><div class="coin-cell">'
-          +   '<div class="coin-icon">' + coin.icon.substring(0, 3) + '</div>'
-          +   '<div><div class="coin-symbol">' + coin.icon + '</div>'
-          +       '<div class="coin-name">' + coin.name + '</div></div>'
-          + '</div></td>'
-          + '<td class="price" id="p-' + coin.symbol + '">--</td>'
-          + '<td class="chg flat" id="c-' + coin.symbol + '">--</td>'
-          + '</tr>';
-      });
-      document.getElementById('coin-table-body').innerHTML = rows.join('');
-    }
-
-    // Update only the changed cells (no full re-render)
-    function updateCoin(symbol, price, chg) {
-      var s = state[symbol];
-      var priceEl = document.getElementById('p-' + symbol);
-      var chgEl   = document.getElementById('c-' + symbol);
-      if (!priceEl || !chgEl) return;
-
-      if (s.prev !== null && price !== s.prev) {
-        var flash = price > s.prev ? 'up' : 'down';
-        priceEl.className = 'price ' + flash;
-        setTimeout(function() { priceEl.className = 'price'; }, 700);
-      }
-      s.prev  = price;
-      s.price = price;
-      s.chg   = chg;
-
-      priceEl.innerText = fmtPrice(price);
-      chgEl.className   = 'chg ' + chgClass(chg);
-      chgEl.innerText   = fmtChg(chg);
-    }
-
-    // ── WebSocket: real-time stream ──
-    var streams = COINS.map(function(c) { return c.symbol.toLowerCase() + '@ticker'; }).join('/');
-    var ws;
-
-    function connectWS() {
-      ws = new WebSocket('wss://stream.binance.com:9443/stream?streams=' + streams);
-
-      ws.onopen = function() {
-        document.getElementById('update-time').innerText = 'Live ●';
-        document.getElementById('update-time').style.color = '#4ade80';
-      };
-
-      ws.onmessage = function(evt) {
-        var msg = JSON.parse(evt.data);
-        var d   = msg.data;
-        if (!d) return;
-        updateCoin(d.s, parseFloat(d.c), d.P);
-        document.getElementById('update-time').innerText = 'Live · ' + new Date().toLocaleTimeString();
-      };
-
-      ws.onerror = ws.onclose = function() {
-        document.getElementById('update-time').innerText = 'Reconnecting...';
-        document.getElementById('update-time').style.color = '#555';
-        setTimeout(connectWS, 3000); // reconnect on disconnect
-      };
-    }
-
-    // ── Initial snapshot via REST so table shows data immediately ──
-    function initSnapshot() {
-      var symbols = JSON.stringify(COINS.map(function(c) { return c.symbol; }));
-      fetch('https://api.binance.com/api/v3/ticker/24hr?symbols=' + encodeURIComponent(symbols))
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          data.forEach(function(t) {
-            updateCoin(t.symbol, parseFloat(t.lastPrice), t.priceChangePercent);
-          });
-          connectWS();
-        })
-        .catch(function() {
-          connectWS(); // still try WS even if REST fails
-        });
-    }
-
-    buildTable();
     initSnapshot();
   </script>
 
