@@ -178,6 +178,7 @@
             <th onclick="sortPos('roe')"      style="cursor:pointer;user-select:none;">ROE % <span class="sort-arrow" id="arr-roe"></span></th>
             <th onclick="sortPos('leverage')" style="cursor:pointer;user-select:none;">Leverage <span class="sort-arrow" id="arr-leverage"></span></th>
             <th onclick="sortPos('chg24')"    style="cursor:pointer;user-select:none;">24h Chg % <span class="sort-arrow" id="arr-chg24"></span></th>
+            <th onclick="sortPos('funding')"   style="cursor:pointer;user-select:none;">Funding <span class="sort-arrow" id="arr-funding"></span></th>
             <th style="text-align:center;">TP/SL</th>
             <th>Margin Type</th>
           </tr>
@@ -195,12 +196,30 @@
     <div class="tabs">
       <button class="tab-btn active" onclick="switchTab('gainers',this)">🚀 Gainers</button>
       <button class="tab-btn" onclick="switchTab('losers',this)">📉 Losers</button>
+      <button class="tab-btn" onclick="switchTab('funding',this)">💸 Funding</button>
       <button class="tab-btn" onclick="switchTab('poshistory',this)">📋 Position History</button>
     </div>
 
     <div class="subtabs" id="subtabs">
       <button class="subtab-btn" onclick="switchMarket('spot',this)">Spot</button>
       <button class="subtab-btn active" onclick="switchMarket('futures',this)">Futures</button>
+    </div>
+
+    <!-- Funding Fee panel -->
+    <div class="table-wrap" id="funding-wrap" style="display:none">
+      <table>
+        <thead>
+          <tr>
+            <th># Coin</th>
+            <th style="text-align:right;">Funding Rate</th>
+            <th style="text-align:right;">Every</th>
+            <th style="text-align:center;">For SHORT</th>
+          </tr>
+        </thead>
+        <tbody id="funding-body">
+          <tr><td colspan="4" style="text-align:center;color:#555;padding:2rem;">Loading...</td></tr>
+        </tbody>
+      </table>
     </div>
 
     <!-- Position History panel -->
@@ -226,6 +245,7 @@
           <th>#&nbsp;Coin</th>
           <th>Price (USDT)</th>
           <th>24h Chg %</th>
+          <th style="text-align:right;">Funding</th>
           <th>Tick Size</th>
           <th>Min Notional</th>
           <th>Taker Fee</th>
@@ -236,7 +256,7 @@
         </tr>
       </thead>
       <tbody id="table-body">
-        <tr><td colspan="10" style="text-align:center;color:#555;padding:2rem;">Loading...</td></tr>
+        <tr><td colspan="11" style="text-align:center;color:#555;padding:2rem;">Loading...</td></tr>
       </tbody>
     </table>
     </div>
@@ -396,7 +416,8 @@
         return notional>0?(parseFloat(p.unRealizedProfit)/(notional/lev)*100):0;
       },
       leverage: function(p){ return parseFloat(p.leverage); },
-      chg24:    function(p){ return parseFloat(pos24hMap[p.symbol] || 0); }
+      chg24:    function(p){ return parseFloat(pos24hMap[p.symbol] || 0); },
+      funding:  function(p){ return fundingMap[p.symbol] ? fundingMap[p.symbol].rate : 0; }
     };
 
     function sortPos(col) {
@@ -407,7 +428,7 @@
 
     function renderPositions() {
       // update arrows
-      ['size','entry','mark','liq','pnl','roe','leverage','chg24'].forEach(function(c){
+      ['size','entry','mark','liq','pnl','roe','leverage','chg24','funding'].forEach(function(c){
         var el = document.getElementById('arr-'+c);
         if (!el) return;
         el.innerText = c === posSortCol ? (posSortAsc ? '↑' : '↓') : '';
@@ -449,6 +470,12 @@
           + '<td class="' + (roe >= 0 ? 'up' : 'down') + '">' + (roe >= 0 ? '+' : '') + roe.toFixed(2) + '%</td>'
           + '<td>' + lev + 'x</td>'
           + '<td class="' + (chg > 0 ? 'up' : chg < 0 ? 'down' : 'flat') + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%' + rankBadge + '</td>'
+          + (function(){
+              var fd = fundingMap[p.symbol];
+              if (!fd) return '<td style="color:#555;">-</td>';
+              var rColor = fd.rate > 0 ? '#4ade80' : fd.rate < 0 ? '#f87171' : '#888';
+              return '<td style="color:' + rColor + ';font-family:monospace;">' + (fd.rate >= 0 ? '+' : '') + fd.rate.toFixed(4) + ' (' + fd.intervalHours + 'h)</td>';
+            })()
           + '<td style="text-align:center;font-weight:700;color:' + (tpMap[p.symbol] ? '#4ade80' : '#555') + ';">' + (tpMap[p.symbol] ? 'YES' : '-') + '</td>'
           + '<td style="color:#888;">' + margin + '</td>'
           + '</tr>';
@@ -558,6 +585,7 @@
     var defaultShortMargin      = parseFloat(localStorage.getItem('shortMargin') || '1');
     var defaultTpTarget         = parseFloat(localStorage.getItem('tpTarget')    || '0.3');
     var tpMap                   = {}; // symbol -> true if TP order exists
+    var fundingMap              = {}; // symbol -> { rate, intervalHours }
 
     /* ── Tab switcher ── */
     function switchTab(tab, btn) {
@@ -565,14 +593,20 @@
       document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
       btn.classList.add('active');
 
+      var isFunding = tab === 'funding';
       var isPosHist = tab === 'poshistory';
-      document.getElementById('ranking-wrap').style.display  = isPosHist ? 'none' : '';
-      document.getElementById('subtabs').style.display       = isPosHist ? 'none' : '';
-      document.getElementById('pos-hist-wrap').style.display = isPosHist ? 'block' : 'none';
+      var isRanking = !isFunding && !isPosHist;
+      document.getElementById('ranking-wrap').style.display    = isRanking  ? '' : 'none';
+      document.getElementById('subtabs').style.display         = isRanking  ? '' : 'none';
+      document.getElementById('pos-hist-wrap').style.display   = isPosHist  ? 'block' : 'none';
+      document.getElementById('funding-wrap').style.display    = isFunding  ? '' : 'none';
 
       if (isPosHist) {
         document.getElementById('table-title').innerText = '📋 Position History';
         loadPosHistory();
+      } else if (isFunding) {
+        document.getElementById('table-title').innerText = '💸 Funding Fee';
+        loadFundingTab();
       } else {
         document.getElementById('table-title').innerText = tab === 'gainers' ? '🚀 Top Gainers' : '📉 Top Losers';
         loadRanking();
@@ -817,7 +851,7 @@
       document.getElementById('update-time').innerText = 'Loading...';
       document.getElementById('update-time').style.color = '#555';
       document.getElementById('table-body').innerHTML =
-        '<tr><td colspan="10" style="text-align:center;color:#555;padding:2rem;">Fetching data...</td></tr>';
+        '<tr><td colspan="11" style="text-align:center;color:#555;padding:2rem;">Fetching data...</td></tr>';
 
       var tickerUrl = market === 'futures'
         ? 'https://fapi.binance.com/fapi/v1/ticker/24hr'
@@ -862,6 +896,12 @@
               + '</div></td>'
               + '<td class="price">'+fmtPrice(t.lastPrice)+'</td>'
               + '<td class="chg '+chgClass(t.priceChangePercent)+'">' +fmtChg(t.priceChangePercent)+'</td>'
+              + (function(){
+                  var fd = fundingMap[t.symbol];
+                  if (!fd) return '<td style="text-align:right;color:#555;">-</td>';
+                  var rColor = fd.rate > 0 ? '#4ade80' : fd.rate < 0 ? '#f87171' : '#888';
+                  return '<td style="text-align:right;color:' + rColor + ';font-family:monospace;">' + (fd.rate >= 0 ? '+' : '') + fd.rate.toFixed(4) + ' (' + fd.intervalHours + 'h)</td>';
+                })()
               + '<td class="mono">'+fmtTick(ei.tick)+'</td>'
               + '<td class="mono">'+fmtMinN(ei.minN)+'</td>'
               + '<td class="fee">'+ei.taker+'</td>'
@@ -879,13 +919,92 @@
           });
 
           document.getElementById('table-body').innerHTML = rows.join('');
+          if (market === 'futures') loadFundingData();
           document.getElementById('update-time').innerText = (market==='futures'?'Futures':'Spot') + ' · ' + new Date().toLocaleTimeString();
           document.getElementById('update-time').style.color = '#555';
         })
         .catch(function() {
           document.getElementById('table-body').innerHTML =
-            '<tr><td colspan="10" style="text-align:center;color:#f87171;padding:2rem;">Failed to load — try again</td></tr>';
+            '<tr><td colspan="11" style="text-align:center;color:#f87171;padding:2rem;">Failed to load — try again</td></tr>';
         });
+    }
+
+    /* ── Funding data ── */
+    async function loadFundingData() {
+      try {
+        var results = await Promise.all([
+          fetch('https://fapi.binance.com/fapi/v1/premiumIndex').then(function(r){ return r.json(); }),
+          fetch('https://fapi.binance.com/fapi/v1/fundingInfo').then(function(r){ return r.json(); })
+        ]);
+        var premium = results[0];
+        var info    = results[1];
+        var intervalMap = {};
+        if (Array.isArray(info)) {
+          info.forEach(function(x){ intervalMap[x.symbol] = x.fundingIntervalHours || 8; });
+        }
+        if (Array.isArray(premium)) {
+          premium.forEach(function(x){
+            if (x.symbol && x.symbol.endsWith('USDT')) {
+              fundingMap[x.symbol] = {
+                rate: parseFloat(x.lastFundingRate) * 100,
+                intervalHours: intervalMap[x.symbol] || 8
+              };
+            }
+          });
+        }
+        // refresh any visible table that shows funding
+        if (currentTab === 'gainers' || currentTab === 'losers') renderFundingInRanking();
+        if (openPositions.length) renderPositions();
+        if (currentTab === 'funding') loadFundingTab();
+      } catch(e) { console.warn('Funding data error:', e); }
+    }
+
+    function renderFundingInRanking() {
+      var rows = document.querySelectorAll('#table-body tr');
+      rows.forEach(function(row) {
+        var symEl = row.querySelector('.coin-symbol');
+        if (!symEl) return;
+        var sym = symEl.innerText.trim() + 'USDT';
+        var fd  = fundingMap[sym];
+        var cells = row.querySelectorAll('td');
+        // funding is the 4th column (index 3)
+        if (cells.length < 4) return;
+        var cell = cells[3];
+        if (!fd) { cell.innerText = '-'; cell.style.color = '#555'; return; }
+        var rColor = fd.rate > 0 ? '#4ade80' : fd.rate < 0 ? '#f87171' : '#888';
+        cell.style.color = rColor;
+        cell.style.textAlign = 'right';
+        cell.style.fontFamily = 'monospace';
+        cell.innerText = (fd.rate >= 0 ? '+' : '') + fd.rate.toFixed(4) + ' (' + fd.intervalHours + 'h)';
+      });
+    }
+
+    function loadFundingTab() {
+      var tbody = document.getElementById('funding-body');
+      var entries = Object.keys(fundingMap).map(function(sym){
+        return { symbol: sym, rate: fundingMap[sym].rate, intervalHours: fundingMap[sym].intervalHours };
+      });
+      // sort by rate descending (highest positive first = best for shorts)
+      entries.sort(function(a, b){ return b.rate - a.rate; });
+      if (!entries.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#555;padding:2rem;">Loading...</td></tr>';
+        loadFundingData();
+        return;
+      }
+      var rows = entries.map(function(e, i){
+        var lbl = e.symbol.replace('USDT','');
+        var rColor = e.rate > 0 ? '#4ade80' : e.rate < 0 ? '#f87171' : '#888';
+        var dir = e.rate > 0.001 ? '<span style="color:#4ade80;">▲ Shorts earn</span>'
+                : e.rate < -0.001 ? '<span style="color:#f87171;">▼ Shorts pay</span>'
+                : '<span style="color:#888;">≈ Neutral</span>';
+        return '<tr>'
+          + '<td><div class="coin-cell"><div class="coin-icon" style="font-size:0.75rem;">'+(i+1)+'</div><div><div class="coin-symbol">'+lbl+'</div><div class="coin-name">/ USDT</div></div></div></td>'
+          + '<td style="text-align:right;color:'+rColor+';font-family:monospace;font-weight:700;">'+(e.rate >= 0 ? '+' : '')+e.rate.toFixed(4)+'%</td>'
+          + '<td style="text-align:right;color:#888;">'+e.intervalHours+'h</td>'
+          + '<td style="text-align:center;">'+dir+'</td>'
+          + '</tr>';
+      });
+      tbody.innerHTML = rows.join('');
     }
 
     /* ── Position History ── */
@@ -936,6 +1055,7 @@
     initSnapshot(); // keep WS alive in background for potential future use
     loadPositions(); // load futures positions if API key is set
     loadBalance();   // load balance cards if API key is set
+    loadFundingData(); // preload funding rates
   </script>
 
 </body>
