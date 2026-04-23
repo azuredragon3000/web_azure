@@ -1,15 +1,11 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>My Website</title>
+  <title>Crypto Prices</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
       font-family: 'Segoe UI', sans-serif;
@@ -29,11 +25,7 @@
       border-bottom: 2px solid #e94560;
     }
 
-    header .logo {
-      font-size: 1.5rem;
-      font-weight: bold;
-      color: #e94560;
-    }
+    header .logo { font-size: 1.5rem; font-weight: bold; color: #e94560; }
 
     nav a {
       color: #f0f0f0;
@@ -43,148 +35,35 @@
       transition: color 0.2s;
     }
 
-    nav a:hover {
-      color: #e94560;
-    }
+    nav a:hover { color: #e94560; }
 
-    .hero {
+    main {
       flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 4rem 2rem;
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      padding: 2.5rem 1.5rem;
+      background: linear-gradient(135deg, #1a1a2e 0%, #0f0f0f 100%);
     }
 
-    .hero h1 {
-      font-size: 3rem;
-      margin-bottom: 1rem;
-      color: #ffffff;
-    }
-
-    .hero h1 span {
-      color: #e94560;
-    }
-
-    .hero p {
-      font-size: 1.2rem;
-      color: #aaaaaa;
-      max-width: 600px;
-      line-height: 1.7;
-      margin-bottom: 2rem;
-    }
-
-    .btn {
-      display: inline-block;
-      padding: 0.75rem 2rem;
-      background: #e94560;
-      color: white;
-      text-decoration: none;
-      border-radius: 30px;
-      font-size: 1rem;
-      transition: transform 0.2s, background 0.2s;
-    }
-
-    .btn:hover {
-      background: #c73652;
-      transform: scale(1.05);
-    }
-
-    .cards {
-      display: flex;
-      justify-content: center;
-      gap: 2rem;
-      padding: 4rem 2rem;
-      flex-wrap: wrap;
-      background: #111111;
-    }
-
-    .card {
-      background: #1a1a2e;
-      border: 1px solid #2a2a4a;
-      border-radius: 12px;
-      padding: 2rem;
-      max-width: 280px;
-      text-align: center;
-      transition: transform 0.2s, border-color 0.2s;
-    }
-
-    .card:hover {
-      transform: translateY(-6px);
-      border-color: #e94560;
-    }
-
-    .card .icon {
-      font-size: 2.5rem;
-      margin-bottom: 1rem;
-    }
-
-    .card h3 {
-      font-size: 1.2rem;
-      margin-bottom: 0.5rem;
-      color: #ffffff;
-    }
-
-    .card p {
-      color: #888888;
-      font-size: 0.9rem;
-      line-height: 1.6;
-    }
-
-    footer {
-      background: #1a1a2e;
-      text-align: center;
-      padding: 1.5rem;
-      color: #555555;
-      font-size: 0.85rem;
-      border-top: 1px solid #2a2a4a;
-    }
-
-    footer a {
-      color: #e94560;
-      text-decoration: none;
-    }
-
-    /* Visitor Panel */
-    #visitor-panel {
-      position: fixed;
-      right: 0;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 190px;
-      background: #0d1117;
-      border: 1px solid #2a2a4a;
-      border-right: none;
-      border-radius: 12px 0 0 12px;
-      padding: 1rem;
-      z-index: 999;
-      display: flex;
-      flex-direction: column;
-      max-height: 420px;
-      box-shadow: -4px 0 20px rgba(0,0,0,0.5);
-    }
-
-    #visitor-panel .panel-header {
+    .table-header {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      font-size: 0.7rem;
+      gap: 0.8rem;
+      max-width: 700px;
+      margin: 0 auto 1.2rem;
+    }
+
+    .table-header h2 {
+      font-size: 1.1rem;
       font-weight: 600;
-      letter-spacing: 1.5px;
+      color: #f0b90b;
+      letter-spacing: 1px;
       text-transform: uppercase;
-      color: #888;
-      margin-bottom: 0.8rem;
     }
 
-    #visitor-panel .live-dot {
-      width: 7px;
-      height: 7px;
+    .live-dot {
+      width: 8px; height: 8px;
       background: #4ade80;
       border-radius: 50%;
       animation: pulse 1.5s infinite;
-      flex-shrink: 0;
     }
 
     @keyframes pulse {
@@ -192,59 +71,75 @@
       50%       { opacity: 0.3; }
     }
 
-    #visitor-panel .panel-count {
-      font-size: 2.2rem;
-      font-weight: bold;
-      color: #fff;
-      font-family: monospace;
-      line-height: 1;
+    .update-time { font-size: 0.75rem; color: #555; margin-left: auto; }
+
+    table {
+      width: 100%;
+      max-width: 700px;
+      margin: 0 auto;
+      border-collapse: collapse;
     }
 
-    #visitor-panel .panel-label {
-      font-size: 0.7rem;
+    thead th {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      font-size: 0.75rem;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
       color: #555;
-      margin-bottom: 0.8rem;
-      margin-top: 0.2rem;
+      border-bottom: 1px solid #2a2a4a;
     }
 
-    #visitor-panel .panel-divider {
-      border: none;
-      border-top: 1px solid #2a2a4a;
-      margin-bottom: 0.8rem;
-    }
+    thead th:not(:first-child) { text-align: right; }
 
-    #visitor-log {
-      overflow-y: auto;
-      flex: 1;
-      scrollbar-width: thin;
-      scrollbar-color: #2a2a4a transparent;
-    }
-
-    #visitor-log::-webkit-scrollbar { width: 4px; }
-    #visitor-log::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 4px; }
-
-    .log-entry {
-      display: flex;
-      align-items: flex-start;
-      gap: 0.5rem;
-      padding: 0.4rem 0;
+    tbody tr {
       border-bottom: 1px solid #1a1a2e;
+      transition: background 0.15s;
     }
 
-    .log-entry:last-child { border-bottom: none; }
+    tbody tr:hover { background: #1a1a2e; }
 
-    .log-entry .log-dot {
-      width: 6px;
-      height: 6px;
-      background: #e94560;
+    tbody td { padding: 0.85rem 1rem; font-size: 0.95rem; }
+
+    .coin-cell { display: flex; align-items: center; gap: 0.6rem; }
+
+    .coin-icon {
+      width: 28px; height: 28px;
       border-radius: 50%;
-      margin-top: 4px;
+      background: #2a2a4a;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.65rem; font-weight: bold; color: #f0b90b;
       flex-shrink: 0;
     }
 
-    @media (max-width: 768px) {
-      #visitor-panel { display: none; }
+    .coin-symbol { font-weight: 600; color: #fff; }
+    .coin-name   { font-size: 0.75rem; color: #555; }
+
+    td.price {
+      text-align: right;
+      font-family: monospace;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #fff;
+      transition: color 0.5s;
     }
+
+    td.chg { text-align: right; font-family: monospace; font-weight: 600; font-size: 0.9rem; }
+
+    .up   { color: #4ade80; }
+    .down { color: #f87171; }
+    .flat { color: #888; }
+
+    footer {
+      background: #1a1a2e;
+      text-align: center;
+      padding: 1rem;
+      color: #555;
+      font-size: 0.8rem;
+      border-top: 1px solid #2a2a4a;
+    }
+
+    footer a { color: #e94560; text-decoration: none; }
   </style>
 </head>
 <body>
@@ -259,328 +154,111 @@
     </nav>
   </header>
 
-  <section class="hero">
-    <h1>Hello, <span>everyone</span></h1>
-    <p>Welcome to my personal website. I build things for the web and love sharing what I learn.</p>
+  <main>
+    <div class="table-header">
+      <span class="live-dot"></span>
+      <h2>Crypto Prices</h2>
+      <span class="update-time" id="update-time">Connecting...</span>
+    </div>
 
-    <div style="margin-top: 2rem; background: #0d1117; border: 1px solid #f0b90b55; border-radius: 14px; padding: 2rem 2.5rem; min-width: 340px; text-align: center;">
-      <div style="display: flex; align-items: center; justify-content: center; gap: 0.6rem; margin-bottom: 0.5rem;">
-        <span style="font-size: 1.6rem;">₿</span>
-        <span style="color: #f0b90b; font-size: 0.8rem; letter-spacing: 2px; text-transform: uppercase; font-weight: 600;">Bitcoin / USDT</span>
-      </div>
-      <div id="btc-price" style="font-size: 3rem; font-weight: bold; color: #ffffff; font-family: monospace; letter-spacing: 1px;">--</div>
-      <div style="display: flex; justify-content: center; align-items: center; gap: 0.5rem; margin-top: 0.6rem;">
-        <span id="btc-dot" style="display: inline-block; width: 8px; height: 8px; background: #4ade80; border-radius: 50;"></span>
-        <span id="btc-status" style="color: #555; font-size: 0.78rem;">Connecting...</span>
-      </div>
-    </div>
-  </section>
-
-  <section class="cards">
-    <div class="card">
-      <div class="icon">💻</div>
-      <h3>Web Development</h3>
-      <p>Building responsive and modern web applications using the latest technologies.</p>
-    </div>
-    <div class="card">
-      <div class="icon">🎨</div>
-      <h3>UI / UX Design</h3>
-      <p>Designing clean, intuitive interfaces that users love to interact with.</p>
-    </div>
-    <div class="card">
-      <div class="icon">🚀</div>
-      <h3>Open Source</h3>
-      <p>Contributing to and maintaining open source projects on GitHub.</p>
-    </div>
-  </section>
-
-  <!-- Visitor Panel -->
-  <div id="visitor-panel">
-    <div class="panel-header">
-      <span class="live-dot"></span> Visitors
-    </div>
-    <div id="visitor-count" class="panel-count">--</div>
-    <div class="panel-label">total visits</div>
-    <hr class="panel-divider">
-    <div id="visitor-log">
-      <div style="color:#555;font-size:0.72rem;">Loading...</div>
-    </div>
-  </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Coin</th>
+          <th>Price (USDT)</th>
+          <th>24h Chg %</th>
+        </tr>
+      </thead>
+      <tbody id="coin-table-body">
+        <tr><td colspan="3" style="text-align:center;color:#555;padding:2rem;">Loading...</td></tr>
+      </tbody>
+    </table>
+  </main>
 
   <footer>
-    <p>© 2026 MyName · Hosted on <a href="https://pages.github.com" target="_blank">GitHub Pages</a></p>
+    <p>Data from Binance &nbsp;·&nbsp; Hosted on <a href="https://pages.github.com" target="_blank">GitHub Pages</a></p>
   </footer>
 
   <script>
-    /* ── Visitor Tracking ── */
-    var LOG_KEY = 'vlog_v3';
+    var COINS = [
+      { symbol: 'BTCUSDT',  name: 'Bitcoin',   icon: 'BTC'  },
+      { symbol: 'ETHUSDT',  name: 'Ethereum',  icon: 'ETH'  },
+      { symbol: 'BNBUSDT',  name: 'BNB',       icon: 'BNB'  },
+      { symbol: 'SOLUSDT',  name: 'Solana',    icon: 'SOL'  },
+      { symbol: 'XRPUSDT',  name: 'XRP',       icon: 'XRP'  },
+      { symbol: 'ADAUSDT',  name: 'Cardano',   icon: 'ADA'  },
+      { symbol: 'DOGEUSDT', name: 'Dogecoin',  icon: 'DOGE' },
+      { symbol: 'AVAXUSDT', name: 'Avalanche', icon: 'AVAX' },
+      { symbol: 'DOTUSDT',  name: 'Polkadot',  icon: 'DOT'  },
+      { symbol: 'LINKUSDT', name: 'Chainlink', icon: 'LINK' }
+    ];
 
-    function getLog() {
-      try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch(e) { return []; }
+    var prevPrices = {};
+
+    function fmtPrice(p) {
+      if (p >= 1000) return '$' + p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      if (p >= 1)    return '$' + p.toFixed(4);
+      return '$' + p.toFixed(6);
     }
 
-    function saveLog(log) {
-      try { localStorage.setItem(LOG_KEY, JSON.stringify(log)); } catch(e) {}
+    function fmtChg(c) {
+      var v = parseFloat(c);
+      return (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
     }
 
-    function renderLog(log) {
-      var el = document.getElementById('visitor-log');
-      if (!log.length) {
-        el.innerHTML = '<div style="color:#555;font-size:0.72rem;padding:0.3rem 0;">No visitors yet</div>';
-        return;
-      }
-      el.innerHTML = log.map(function(e) {
-        var d   = new Date(e.time);
-        var day = d.toLocaleDateString('vi-VN', {day:'2-digit', month:'2-digit'});
-        var tm  = d.toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
-        return '<div class="log-entry">'
-          + '<span class="log-dot"></span>'
-          + '<div>'
-          + '<div style="color:#4ade80;font-size:0.72rem;font-family:monospace;">' + e.ip + '</div>'
-          + '<div style="color:#666;font-size:0.67rem;">' + day + ' ' + tm + '</div>'
-          + '</div></div>';
-      }).join('');
+    function chgClass(c) {
+      var v = parseFloat(c);
+      return v > 0 ? 'up' : v < 0 ? 'down' : 'flat';
     }
 
-    function logVisit(visitorIP) {
-      var log = getLog();
-      var idx = -1;
-      for (var i = 0; i < log.length; i++) {
-        if (log[i].ip === visitorIP) { idx = i; break; }
-      }
-      if (idx !== -1) {
-        log[idx].time = new Date().toISOString(); // same IP: chỉ update time
-      } else {
-        log.unshift({ time: new Date().toISOString(), ip: visitorIP }); // IP mới
-        if (log.length > 50) log.pop();
-      }
-      saveLog(log);
-      document.getElementById('visitor-count').innerText = log.length;
-      renderLog(log);
-    }
+    function updateTable(tickers) {
+      var map = {};
+      tickers.forEach(function(t) { map[t.symbol] = t; });
 
-    fetch('https://api.ipify.org?format=json')
-      .then(function(r) { return r.json(); })
-      .then(function(d) { logVisit(d.ip || 'unknown'); })
-      .catch(function()  { logVisit('unknown'); });
+      var rows = COINS.map(function(coin) {
+        var t = map[coin.symbol];
+        if (!t) return '';
+        var price = parseFloat(t.lastPrice);
+        var chg   = t.priceChangePercent;
+        var prev  = prevPrices[coin.symbol];
+        var flash = (prev !== undefined) ? (price > prev ? 'up' : price < prev ? 'down' : '') : '';
+        prevPrices[coin.symbol] = price;
 
-    /* ── Bitcoin Price ── */
-    var priceEl  = document.getElementById('btc-price');
-    var statusEl = document.getElementById('btc-status');
-    var dotEl    = document.getElementById('btc-dot');
-    var prevPrice = null;
-
-    function updatePrice() {
-      fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT')
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          var price = parseFloat(data.price);
-          var formatted = '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-          if (prevPrice !== null) {
-            priceEl.style.color = price > prevPrice ? '#4ade80' : price < prevPrice ? '#f87171' : '#ffffff';
-            setTimeout(function() { priceEl.style.color = '#ffffff'; }, 800);
-          }
-          priceEl.innerText = formatted;
-          prevPrice = price;
-          statusEl.innerText = 'Updated ' + new Date().toLocaleTimeString();
-          dotEl.style.background = '#4ade80';
-        })
-        .catch(function() {
-          statusEl.innerText = 'Connection error — retrying...';
-          dotEl.style.background = '#f87171';
-        });
-    }
-
-    updatePrice();
-    setInterval(updatePrice, 2000);
-  </script>
-
-</body>
-</html>
-
-    function getLog() {
-      try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); }
-      catch(e) { return []; }
-    }
-
-    function saveLog(log) {
-      try { localStorage.setItem(LOG_KEY, JSON.stringify(log)); } catch(e) {}
-    }
-
-    function renderLog(log) {
-      var el = document.getElementById('visitor-log');
-      if (!log.length) {
-        el.innerHTML = '<div style="color:#555;font-size:0.72rem;padding:0.3rem 0;">No visitors yet</div>';
-        return;
-      }
-      el.innerHTML = log.map(function(e) {
-        var d   = new Date(e.time);
-        var day = d.toLocaleDateString('vi-VN', {day:'2-digit', month:'2-digit'});
-        var tm  = d.toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
-        return '<div class="log-entry">'
-          + '<span class="log-dot"></span>'
-          + '<div>'
-          + '<div style="color:#4ade80;font-size:0.72rem;font-family:monospace;">' + e.ip + '</div>'
-          + '<div style="color:#666;font-size:0.67rem;">' + day + ' ' + tm + '</div>'
-          + '</div></div>';
-      }).join('');
-    }
-
-    function logVisit(visitorIP) {
-      var log = getLog();
-      var idx = -1;
-      for (var i = 0; i < log.length; i++) {
-        if (log[i].ip === visitorIP) { idx = i; break; }
-      }
-
-      if (idx !== -1) {
-        // same IP: chỉ update thời gian, không thêm mới
-        log[idx].time = new Date().toISOString();
-      } else {
-        // IP mới: thêm vào đầu
-        log.unshift({ time: new Date().toISOString(), ip: visitorIP });
-        if (log.length > 50) log.pop();
-      }
-
-      saveLog(log);
-      document.getElementById('visitor-count').innerText = log.length;
-      renderLog(log);
-    }
-
-    fetch('https://api.ipify.org?format=json')
-      .then(function(r) { return r.json(); })
-      .then(function(d) { logVisit(d.ip || 'unknown'); })
-      .catch(function()  { logVisit('unknown'); });
-    }
-
-    function renderLog(log) {
-      const el = document.getElementById('visitor-log');
-      if (!log.length) {
-        el.innerHTML = '<div style="color:#555;font-size:0.72rem;padding:0.3rem 0;">No history yet</div>';
-        return;
-      }
-      el.innerHTML = log.map(function(e) {
-        const d   = new Date(e.time);
-        const day = d.toLocaleDateString('vi-VN', {day:'2-digit', month:'2-digit'});
-        const tm  = d.toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
-        return '<div class="log-entry">'
-          + '<span class="log-dot"></span>'
-          + '<div>'
-          + '<div style="color:#4ade80;font-size:0.72rem;font-family:monospace;">' + (e.ip || 'unknown') + '</div>'
-          + '<div style="color:#666;font-size:0.67rem;">' + day + ' ' + tm + ' &nbsp;#' + e.count + '</div>'
-          + '</div></div>';
-      }).join('');
-    }
-
-    // Clean up any duplicate IPs already in localStorage (from old version)
-    (function cleanOldLog() {
-      var log = getLog();
-      var seen = {};
-      var cleaned = [];
-      for (var i = 0; i < log.length; i++) {
-        if (!seen[log[i].ip]) {
-          seen[log[i].ip] = true;
-          cleaned.push(log[i]);
-        }
-      }
-      saveLog(cleaned);
-      // Fix stored total to match unique count
-      localStorage.setItem('visit_total_web_azure', cleaned.length);
-    })();
-
-    // Step 1: get visitor IP
-    fetch('https://api.ipify.org?format=json')
-      .then(function(r) { return r.json(); })
-      .then(function(ipData) {
-        var visitorIP = ipData.ip || 'unknown';
-        logVisit(visitorIP);
-      })
-      .catch(function() {
-        logVisit('unknown');
+        return '<tr>'
+          + '<td><div class="coin-cell">'
+          +   '<div class="coin-icon">' + coin.icon.substring(0, 3) + '</div>'
+          +   '<div><div class="coin-symbol">' + coin.icon + '</div>'
+          +       '<div class="coin-name">' + coin.name + '</div></div>'
+          + '</div></td>'
+          + '<td class="price ' + flash + '" id="p-' + coin.symbol + '">' + fmtPrice(price) + '</td>'
+          + '<td class="chg ' + chgClass(chg) + '">' + fmtChg(chg) + '</td>'
+          + '</tr>';
       });
 
-    function logVisit(visitorIP) {
-      var log = getLog();
-      var existing = -1;
-      for (var i = 0; i < log.length; i++) {
-        if (log[i].ip === visitorIP) { existing = i; break; }
-      }
+      document.getElementById('coin-table-body').innerHTML = rows.join('');
 
-      if (existing !== -1) {
-        // Same IP — update timestamp only, do NOT increment count
-        log[existing].time = new Date().toISOString();
-        saveLog(log);
-        var uniqueCount = log.length;
-        document.getElementById('visitor-count').innerText = uniqueCount;
-        renderLog(log);
-      } else {
-        // New IP — add and increment
-        var newCount = log.length + 1;
-        localStorage.setItem('visit_total_web_azure', newCount);
-        log.unshift({ time: new Date().toISOString(), count: newCount, ip: visitorIP });
-        if (log.length > 50) log.pop();
-        saveLog(log);
-        document.getElementById('visitor-count').innerText = newCount;
-        renderLog(log);
-      }
+      COINS.forEach(function(coin) {
+        var el = document.getElementById('p-' + coin.symbol);
+        if (el && (el.classList.contains('up') || el.classList.contains('down'))) {
+          setTimeout(function() { if (el) el.classList.remove('up', 'down'); }, 700);
+        }
+      });
 
-      // Try remote counter in background (update if works)
-      fetch('https://api.counterapi.dev/v1/' + COUNTER_NS + '/' + COUNTER_KEY + '/up')
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          var remoteCount = data.count || data.value;
-          if (remoteCount) {
-            document.getElementById('visitor-count').innerText = remoteCount.toLocaleString();
-          }
-        })
-        .catch(function() { /* giữ nguyên local count */ });
+      document.getElementById('update-time').innerText = 'Updated ' + new Date().toLocaleTimeString();
     }
 
-      // Try remote counter in background (update if works)
-      fetch('https://api.counterapi.dev/v1/' + COUNTER_NS + '/' + COUNTER_KEY + '/up')
+    function fetchPrices() {
+      var symbols = JSON.stringify(COINS.map(function(c) { return c.symbol; }));
+      fetch('https://api.binance.com/api/v3/ticker/24hr?symbols=' + encodeURIComponent(symbols))
         .then(function(r) { return r.json(); })
-        .then(function(data) {
-          var remoteCount = data.count || data.value;
-          if (remoteCount) {
-            document.getElementById('visitor-count').innerText = remoteCount.toLocaleString();
-          }
-        })
-        .catch(function() { /* giữ nguyên local count */ });
-    }
-
-    /* ── Bitcoin Price ── */
-    const priceEl  = document.getElementById('btc-price');
-    const statusEl = document.getElementById('btc-status');
-    const dotEl    = document.getElementById('btc-dot');
-    let prevPrice  = null;
-
-    function updatePrice() {
-      fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT')
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          const price = parseFloat(data.price);
-          const formatted = '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-          if (prevPrice !== null) {
-            priceEl.style.color = price > prevPrice ? '#4ade80' : price < prevPrice ? '#f87171' : '#ffffff';
-            setTimeout(function() { priceEl.style.color = '#ffffff'; }, 800);
-          }
-
-          priceEl.innerText = formatted;
-          prevPrice = price;
-
-          const now = new Date();
-          statusEl.innerText = 'Updated ' + now.toLocaleTimeString();
-          dotEl.style.background = '#4ade80';
-        })
+        .then(function(data) { updateTable(data); })
         .catch(function() {
-          statusEl.innerText = 'Connection error — retrying...';
-          dotEl.style.background = '#f87171';
+          document.getElementById('update-time').innerText = 'Connection error — retrying...';
         });
     }
 
-    updatePrice();
-    setInterval(updatePrice, 2000);
+    fetchPrices();
+    setInterval(fetchPrices, 3000);
   </script>
 
 </body>
