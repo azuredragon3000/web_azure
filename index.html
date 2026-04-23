@@ -362,10 +362,19 @@
       localStorage.setItem('visit_total_web_azure', localCount);
       document.getElementById('visitor-count').innerText = localCount;
 
-      // Save to log
+      // Save to log — deduplicate by IP (update existing entry if same IP)
       var log = getLog();
-      log.unshift({ time: new Date().toISOString(), count: localCount, ip: visitorIP });
-      if (log.length > 50) log.pop();
+      var existing = -1;
+      for (var i = 0; i < log.length; i++) {
+        if (log[i].ip === visitorIP) { existing = i; break; }
+      }
+      var entry = { time: new Date().toISOString(), count: localCount, ip: visitorIP };
+      if (existing !== -1) {
+        log[existing] = entry;           // ghi đè entry cũ
+      } else {
+        log.unshift(entry);              // IP mới → thêm lên đầu
+        if (log.length > 50) log.pop();
+      }
       saveLog(log);
       renderLog(log);
 
