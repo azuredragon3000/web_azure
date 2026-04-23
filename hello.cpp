@@ -1,6 +1,8 @@
-#include <stdio.h>
+// C++ counter — compiled to WebAssembly (WASM) and inlined in index.html
+// Equivalent logic running in the browser:
 
-int main() {
-    printf("Hello World from C++!\n");
-    return 0;
+static int counter = 0;
+
+int increment() {
+    return ++counter;
 }

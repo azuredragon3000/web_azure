@@ -165,9 +165,13 @@
     <p>Welcome to my personal website. I build things for the web and love sharing what I learn.</p>
     <a href="#" class="btn">View My Work</a>
 
-    <div style="margin-top: 2rem; background: #0d1117; border: 1px solid #e94560; border-radius: 10px; padding: 1.5rem; max-width: 500px; text-align: left;">
-      <div style="color: #888; font-size: 0.8rem; margin-bottom: 0.5rem;">C++ Output (WebAssembly)</div>
-      <pre id="cpp-output" style="color: #4ade80; font-family: monospace; font-size: 1.1rem; margin: 0;">Loading...</pre>
+    <div style="margin-top: 2rem; background: #0d1117; border: 1px solid #30363d; border-radius: 10px; padding: 1.5rem; max-width: 420px; text-align: left;">
+      <div style="color: #888; font-size: 0.75rem; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 1rem;">C++ Counter (WebAssembly)</div>
+      <div style="display: flex; align-items: center; gap: 1.2rem;">
+        <button id="btn-increment" style="padding: 0.6rem 1.5rem; background: #e94560; color: white; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; transition: background 0.2s;">+ Increment</button>
+        <pre id="cpp-output" style="color: #4ade80; font-family: monospace; font-size: 1.6rem; margin: 0;">0</pre>
+      </div>
+      <div style="margin-top: 0.8rem; color: #555; font-size: 0.78rem; font-family: monospace;">int counter = 0; // running in WASM</div>
     </div>
   </section>
 
@@ -194,16 +198,31 @@
   </footer>
 
   <script>
-    var Module = {
-      print: function(text) {
-        document.getElementById('cpp-output').innerText = text;
-      },
-      printErr: function(text) {
-        document.getElementById('cpp-output').innerText = 'Error: ' + text;
-      }
-    };
+    // WASM binary for C++ counter:
+    //   static int counter = 0;
+    //   int increment() { return ++counter; }
+    const wasmBytes = new Uint8Array([
+      0,97,115,109,1,0,0,0,    // magic + version
+      1,5,1,96,0,1,127,         // type section: func () -> i32
+      3,2,1,0,                  // function section
+      6,6,1,127,1,65,0,11,      // global section: mutable i32 = 0
+      7,13,1,9,105,110,99,114,101,109,101,110,116,0,0, // export "increment"
+      10,13,1,11,0,35,0,65,1,106,36,0,35,0,11          // code: ++counter
+    ]);
+
+    WebAssembly.instantiate(wasmBytes).then(function(result) {
+      const increment = result.instance.exports.increment;
+      const btn = document.getElementById('btn-increment');
+      const out = document.getElementById('cpp-output');
+
+      btn.addEventListener('click', function() {
+        out.innerText = increment();
+      });
+
+      btn.addEventListener('mouseover', function() { this.style.background = '#c73652'; });
+      btn.addEventListener('mouseout',  function() { this.style.background = '#e94560'; });
+    });
   </script>
-  <script src="hello.js"></script>
 
 </body>
 </html>
