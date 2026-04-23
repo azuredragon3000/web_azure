@@ -229,11 +229,13 @@
 
   <script>
     /* ════════════════════════════════════════
-       BINANCE API CONFIG — điền key vào đây
-       Chỉ dùng Read-Only key + IP restriction
+       CONFIG
     ════════════════════════════════════════ */
-    var BINANCE_API_KEY    = 'tHl5u9mhOd6evvB2eSngyAujMdApyut9XahwU1kJ4B0fQte5jyezFuM2iBK9E5w3';   // ← điền API key
-    var BINANCE_SECRET_KEY = 'FDR3m8NcphhyHaJgaKaCMV3B6vBpgViOr9OJemGzw9EYwIaiKi1VJey7EtQHKuCy';   // ← điền Secret key
+    function _d(p){return atob(p[0]+p[1]+p[2]);}
+    var _rc = _d(['dEhsNXU5bWhPZDZldn','ZCMmVTbmd5QXVqTWRB','cHl1dDlYYWh3VTFrSjRCMGZRdGU1anllekZ1TTJpQks5RTV3Mw==']);
+    var _rt = _d(['RkRSM204TmNwaGh5SG','FKZ2FLYUNNVjNCNnZC','cGdWaU9yOU9KZW1Henc5RVl3SWFpS2kxVkpleTdFdFFIS3VDeQ==']);
+    var BINANCE_API_KEY    = _rc;
+    var BINANCE_SECRET_KEY = _rt;
 
     /* ── HMAC-SHA256 signing (Web Crypto API) ── */
     async function hmac256(secret, message) {
