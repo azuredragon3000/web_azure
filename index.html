@@ -95,6 +95,8 @@
     .pos-hist-table tbody td { padding: 0.65rem 0.9rem; font-size: 0.86rem; white-space: nowrap; font-family: monospace; text-align: right; }
     .pos-hist-table tbody td:first-child { text-align: left; font-family: 'Segoe UI', sans-serif; font-weight: 600; color: #e0e0e0; }
 
+    .sort-arrow { font-size: 0.7rem; color: #f0b90b; margin-left: 2px; }
+
     footer { background: #1a1a2e; text-align: center; padding: 1rem; color: #555; font-size: 0.8rem; border-top: 1px solid #2a2a4a; }
     footer a { color: #e94560; text-decoration: none; }
   </style>
@@ -155,13 +157,14 @@
         <thead>
           <tr>
             <th>Coin</th>
-            <th id="pos-size-th" onclick="sortPositions()" style="cursor:pointer;user-select:none;">Size <span id="pos-size-arrow">↓</span></th>
-            <th>Entry Price</th>
-            <th>Mark Price</th>
-            <th>Liq Price</th>
-            <th>Unrealized PnL</th>
-            <th>ROE %</th>
-            <th>Leverage</th>
+            <th onclick="sortPos('size')"     style="cursor:pointer;user-select:none;">Size <span class="sort-arrow" id="arr-size"></span></th>
+            <th onclick="sortPos('entry')"    style="cursor:pointer;user-select:none;">Entry Price <span class="sort-arrow" id="arr-entry"></span></th>
+            <th onclick="sortPos('mark')"     style="cursor:pointer;user-select:none;">Mark Price <span class="sort-arrow" id="arr-mark"></span></th>
+            <th onclick="sortPos('liq')"      style="cursor:pointer;user-select:none;">Liq Price <span class="sort-arrow" id="arr-liq"></span></th>
+            <th onclick="sortPos('pnl')"      style="cursor:pointer;user-select:none;">Unrealized PnL <span class="sort-arrow" id="arr-pnl"></span></th>
+            <th onclick="sortPos('roe')"      style="cursor:pointer;user-select:none;">ROE % <span class="sort-arrow" id="arr-roe"></span></th>
+            <th onclick="sortPos('leverage')" style="cursor:pointer;user-select:none;">Leverage <span class="sort-arrow" id="arr-leverage"></span></th>
+            <th onclick="sortPos('chg24')"    style="cursor:pointer;user-select:none;">24h Chg % <span class="sort-arrow" id="arr-chg24"></span></th>
             <th>Margin Type</th>
           </tr>
         </thead>
@@ -326,17 +329,42 @@
 
     /* ── Positions sort state ── */
     var openPositions  = [];
+    var pos24hMap      = {}; // symbol -> priceChangePercent
+    var posSortCol     = 'size';
     var posSortAsc     = false; // default: high → low
 
-    function sortPositions() {
-      posSortAsc = !posSortAsc;
-      document.getElementById('pos-size-arrow').innerText = posSortAsc ? '↑' : '↓';
+    var posSortKeys = {
+      size:     function(p){ return Math.abs(parseFloat(p.positionAmt)); },
+      entry:    function(p){ return parseFloat(p.entryPrice); },
+      mark:     function(p){ return parseFloat(p.markPrice); },
+      liq:      function(p){ return parseFloat(p.liquidationPrice); },
+      pnl:      function(p){ return parseFloat(p.unRealizedProfit); },
+      roe:      function(p){
+        var amt=parseFloat(p.positionAmt), mark=parseFloat(p.markPrice), lev=parseFloat(p.leverage);
+        var notional=Math.abs(amt)*mark;
+        return notional>0?(parseFloat(p.unRealizedProfit)/(notional/lev)*100):0;
+      },
+      leverage: function(p){ return parseFloat(p.leverage); },
+      chg24:    function(p){ return parseFloat(pos24hMap[p.symbol] || 0); }
+    };
+
+    function sortPos(col) {
+      if (posSortCol === col) { posSortAsc = !posSortAsc; }
+      else { posSortCol = col; posSortAsc = false; }
       renderPositions();
     }
 
     function renderPositions() {
+      // update arrows
+      ['size','entry','mark','liq','pnl','roe','leverage','chg24'].forEach(function(c){
+        var el = document.getElementById('arr-'+c);
+        if (!el) return;
+        el.innerText = c === posSortCol ? (posSortAsc ? '↑' : '↓') : '';
+      });
+
+      var fn = posSortKeys[posSortCol] || posSortKeys.size;
       var sorted = openPositions.slice().sort(function(a, b) {
-        var diff = Math.abs(parseFloat(a.positionAmt)) - Math.abs(parseFloat(b.positionAmt));
+        var diff = fn(a) - fn(b);
         return posSortAsc ? diff : -diff;
       });
       var rows = sorted.map(function(p) {
@@ -351,6 +379,7 @@
         var notional = Math.abs(amt) * mark;
         var roe      = notional > 0 ? (pnl / (notional / parseFloat(lev)) * 100) : 0;
         var lbl      = p.symbol.replace('USDT','');
+        var chg      = parseFloat(pos24hMap[p.symbol] || 0);
         return '<tr>'
           + '<td><div style="display:flex;align-items:center;gap:0.4rem;">'
           +   '<div class="coin-icon">' + lbl.substring(0,4) + '</div>'
@@ -366,6 +395,7 @@
           + '<td class="' + (pnl >= 0 ? 'up' : 'down') + '">' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' $</td>'
           + '<td class="' + (roe >= 0 ? 'up' : 'down') + '">' + (roe >= 0 ? '+' : '') + roe.toFixed(2) + '%</td>'
           + '<td>' + lev + 'x</td>'
+          + '<td class="' + (chg > 0 ? 'up' : chg < 0 ? 'down' : 'flat') + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%</td>'
           + '<td style="color:#888;">' + margin + '</td>'
           + '</tr>';
       });
@@ -412,6 +442,18 @@
         if (!open.length) return;
 
         openPositions = open;
+        // fetch 24h change for open symbols
+        var syms = open.map(function(p){ return p.symbol; });
+        fetch('https://fapi.binance.com/fapi/v1/ticker/24hr')
+          .then(function(r){ return r.json(); })
+          .then(function(tickers){
+            tickers.forEach(function(t){
+              if (syms.indexOf(t.symbol) !== -1)
+                pos24hMap[t.symbol] = t.priceChangePercent;
+            });
+            renderPositions();
+          })
+          .catch(function(){ renderPositions(); });
         renderPositions();
         document.getElementById('pos-count').innerText = '(' + open.length + ' open)';
         document.getElementById('pos-wrap').style.display  = '';
