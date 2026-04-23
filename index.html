@@ -74,8 +74,7 @@
     </div>
 
     <div class="tabs">
-      <button class="tab-btn active" onclick="switchTab('watchlist',this)">⭐ Watchlist</button>
-      <button class="tab-btn" onclick="switchTab('gainers',this)">🚀 Gainers</button>
+      <button class="tab-btn active" onclick="switchTab('gainers',this)">🚀 Gainers</button>
       <button class="tab-btn" onclick="switchTab('losers',this)">📉 Losers</button>
     </div>
 
@@ -114,25 +113,16 @@
     function chgClass(c) { var v=parseFloat(c); return v>0?'up':v<0?'down':'flat'; }
 
     /* ── State ── */
-    var currentTab    = 'watchlist';
-    var currentMarket = 'futures';  // default Futures to match Binance app default
+    var currentTab    = 'gainers';
+    var currentMarket = 'futures';
 
     /* ── Tab switcher ── */
     function switchTab(tab, btn) {
       currentTab = tab;
       document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
       btn.classList.add('active');
-
-      var subtabs = document.getElementById('subtabs');
-      if (tab === 'watchlist') {
-        subtabs.classList.remove('show');
-        document.getElementById('table-title').innerText = 'Watchlist';
-        buildWatchlist();
-      } else {
-        subtabs.classList.add('show');
-        document.getElementById('table-title').innerText = tab === 'gainers' ? '🚀 Top Gainers' : '📉 Top Losers';
-        loadRanking();
-      }
+      document.getElementById('table-title').innerText = tab === 'gainers' ? '🚀 Top Gainers' : '📉 Top Losers';
+      loadRanking();
     }
 
     function switchMarket(market, btn) {
@@ -288,8 +278,10 @@
     }
 
     /* ── Init ── */
-    buildWatchlist();
-    initSnapshot();
+    document.getElementById('subtabs').classList.add('show');
+    document.getElementById('table-title').innerText = '🚀 Top Gainers';
+    loadRanking();
+    initSnapshot(); // keep WS alive in background for potential future use
   </script>
 
 </body>
