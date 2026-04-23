@@ -313,8 +313,8 @@
 
   <script>
     /* ── Visitor Tracking ── */
-    const LOG_KEY    = 'visitor_log_web_azure';
-    const COUNTER_NS = 'azuredragon3000';
+    const LOG_KEY     = 'visitor_log_web_azure';
+    const COUNTER_NS  = 'azuredragon3000';
     const COUNTER_KEY = 'web-azure-v1';
 
     function getLog() {
@@ -339,26 +339,47 @@
         return '<div class="log-entry">'
           + '<span class="log-dot"></span>'
           + '<div>'
-          + '<div style="color:#ccc;font-size:0.72rem;">' + day + ' ' + tm + '</div>'
-          + '<div style="color:#555;font-size:0.68rem;">#' + e.count + '</div>'
+          + '<div style="color:#4ade80;font-size:0.72rem;font-family:monospace;">' + (e.ip || 'unknown') + '</div>'
+          + '<div style="color:#666;font-size:0.67rem;">' + day + ' ' + tm + ' &nbsp;#' + e.count + '</div>'
           + '</div></div>';
       }).join('');
     }
 
-    fetch('https://api.counterapi.dev/v1/' + COUNTER_NS + '/' + COUNTER_KEY + '/up')
+    // Step 1: get visitor IP
+    fetch('https://api.ipify.org?format=json')
       .then(function(r) { return r.json(); })
-      .then(function(data) {
-        const count = data.count || data.value || 0;
-        document.getElementById('visitor-count').innerText = count.toLocaleString();
-        const log = getLog();
-        log.unshift({ time: new Date().toISOString(), count: count });
+      .then(function(ipData) {
+        var visitorIP = ipData.ip || 'unknown';
+
+        // Step 2: hit counter
+        fetch('https://api.counterapi.dev/v1/' + COUNTER_NS + '/' + COUNTER_KEY + '/up')
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            var count = data.count || data.value || 0;
+            document.getElementById('visitor-count').innerText = count.toLocaleString();
+            var log = getLog();
+            log.unshift({ time: new Date().toISOString(), count: count, ip: visitorIP });
+            if (log.length > 50) log.pop();
+            saveLog(log);
+            renderLog(log);
+          })
+          .catch(function() {
+            document.getElementById('visitor-count').innerText = '-';
+            var log = getLog();
+            log.unshift({ time: new Date().toISOString(), count: '-', ip: visitorIP });
+            if (log.length > 50) log.pop();
+            saveLog(log);
+            renderLog(log);
+          });
+      })
+      .catch(function() {
+        // IP fetch failed — still log the visit
+        document.getElementById('visitor-count').innerText = '-';
+        var log = getLog();
+        log.unshift({ time: new Date().toISOString(), count: '-', ip: 'unknown' });
         if (log.length > 50) log.pop();
         saveLog(log);
         renderLog(log);
-      })
-      .catch(function() {
-        document.getElementById('visitor-count').innerText = '?';
-        renderLog(getLog());
       });
 
     /* ── Bitcoin Price ── */
