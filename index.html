@@ -193,6 +193,7 @@
             <th onclick="sortPos('liq')"      style="cursor:pointer;user-select:none;">Liq Price <span class="sort-arrow" id="arr-liq"></span></th>
             <th onclick="sortPos('pnl')"      style="cursor:pointer;user-select:none;">Unrealized PnL <span class="sort-arrow" id="arr-pnl"></span></th>
             <th onclick="sortPos('roe')"      style="cursor:pointer;user-select:none;">ROE % <span class="sort-arrow" id="arr-roe"></span></th>
+            <th style="text-align:center;">Close</th>
             <th onclick="sortPos('leverage')" style="cursor:pointer;user-select:none;">Leverage <span class="sort-arrow" id="arr-leverage"></span></th>
             <th onclick="sortPos('chg24')"    style="cursor:pointer;user-select:none;">24h Chg % <span class="sort-arrow" id="arr-chg24"></span></th>
             <th onclick="sortPos('funding')"   style="cursor:pointer;user-select:none;">Funding <span class="sort-arrow" id="arr-funding"></span></th>
@@ -505,6 +506,14 @@
           + '<td class="' + (liq > 0 ? 'down' : 'flat') + '">' + (liq > 0 ? fmtPrice(liq) : '--') + '</td>'
           + '<td class="' + (pnl >= 0 ? 'up' : 'down') + '">' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' $</td>'
           + '<td class="' + (roe >= 0 ? 'up' : 'down') + '">' + (roe >= 0 ? '+' : '') + roe.toFixed(2) + '%</td>'
+          + (function(){
+              var closing = closeStatuses[p.symbol] && closeStatuses[p.symbol].closing;
+              if (closing) return '<td style="text-align:center;"><span style="color:#f0b90b;font-size:0.72rem;">Closing...</span></td>';
+              return '<td style="text-align:center;">'
+                + '<button onclick="closePosition(\''+p.symbol+'\',\''+Math.abs(amt).toFixed(8)+'\','+isLong+')" '
+                + 'style="padding:0.15rem 0.55rem;border-radius:4px;border:1px solid #f87171;background:transparent;color:#f87171;font-size:0.72rem;cursor:pointer;">Close</button>'
+                + '</td>';
+            })()
           + '<td>' + lev + 'x</td>'
           + '<td class="' + (chg > 0 ? 'up' : chg < 0 ? 'down' : 'flat') + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%' + rankBadge + '</td>'
           + (function(){
@@ -681,6 +690,7 @@
     var tpMap                   = {}; // symbol -> true if TP order exists
     var fundingMap              = {}; // symbol -> { rate, intervalHours }
     var posOpenTimeMap          = {}; // symbol -> open timestamp (ms), fetched once per session
+    var closeStatuses           = {}; // symbol -> { closing: bool }
 
     /* ── Tab switcher ── */
     function switchTab(tab, btn) {
@@ -843,6 +853,53 @@
     function fmtMinN(v) {
       if (v === '--' || v === 0) return '--';
       return '$' + parseFloat(v).toLocaleString('en-US', {maximumFractionDigits:2});
+    }
+
+    async function closePosition(symbol, qtyStr, isLong) {
+      var lbl = symbol.replace('USDT','');
+      var side = isLong ? 'SELL' : 'BUY';
+      var posSide = isLong ? 'LONG' : 'SHORT';
+      var qty = parseFloat(qtyStr);
+      var ei = exInfoCache.futures && exInfoCache.futures[symbol];
+      var stepSize = (ei && ei.step) ? parseFloat(ei.step) : 0.001;
+      var decimals = countDecimals(stepSize);
+      var qtyFmt = qty.toFixed(decimals);
+      if (!confirm('Close ' + posSide + ' ' + lbl + '?\nQty: ' + qtyFmt + '\nThis places a MARKET order immediately.')) return;
+      closeStatuses[symbol] = { closing: true };
+      renderPositions();
+      try {
+        var r = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/order', {
+          symbol: symbol,
+          side: side,
+          positionSide: posSide,
+          type: 'MARKET',
+          quantity: qtyFmt,
+          reduceOnly: 'true'
+        });
+        if (r && r.code) {
+          alert('Close failed: ' + (r.msg || ('code ' + r.code)));
+          closeStatuses[symbol] = { closing: false };
+          renderPositions();
+        } else {
+          // position closed — remove from local state
+          delete posOpenTimeMap[symbol];
+          delete closeStatuses[symbol];
+          openPositions = openPositions.filter(function(p){ return p.symbol !== symbol; });
+          openPositionSymbols.delete(lbl);
+          renderPositions();
+          refreshPosColumn();
+          if (!openPositions.length) {
+            document.getElementById('pos-wrap').style.display  = 'none';
+            document.getElementById('pos-label').style.display = 'none';
+          } else {
+            document.getElementById('pos-count').innerText = '(' + openPositions.length + ' open)';
+          }
+        }
+      } catch(e) {
+        alert('Close error: ' + (e.message || e));
+        closeStatuses[symbol] = { closing: false };
+        renderPositions();
+      }
     }
 
     /* ── Short order helpers ── */
