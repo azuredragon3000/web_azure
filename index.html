@@ -93,6 +93,7 @@
       <span>⚡ My Futures Positions</span>
       <span id="pos-count" style="color:#555"></span>
     </div>
+    <div id="pos-error" style="display:none;max-width:1100px;margin:0 auto 1rem;padding:0.8rem 1rem;background:#2a0a0a;border:1px solid #f87171;border-radius:8px;color:#f87171;font-size:0.82rem;font-family:monospace;"></div>
     <div class="pos-wrap" id="pos-wrap" style="display:none">
       <table class="pos-table">
         <thead>
@@ -183,6 +184,16 @@
       if (!BINANCE_API_KEY || !BINANCE_SECRET_KEY) return;
       try {
         var data = await binanceAuth('https://fapi.binance.com', '/fapi/v2/positionRisk');
+
+        // Show Binance error if returned
+        if (data && data.code && data.msg) {
+          var errEl = document.getElementById('pos-error');
+          errEl.innerText = 'Binance error ' + data.code + ': ' + data.msg;
+          errEl.style.display = '';
+          document.getElementById('pos-label').style.display = '';
+          return;
+        }
+
         var open = data.filter(function(p){ return parseFloat(p.positionAmt) !== 0; });
 
         if (!open.length) return;
@@ -227,6 +238,11 @@
         // Refresh positions every 5s
         setTimeout(loadPositions, 5000);
       } catch(e) {
+        var errMsg = e && e.message ? e.message : JSON.stringify(e);
+        var errEl = document.getElementById('pos-error');
+        errEl.innerText = 'Positions error: ' + errMsg;
+        errEl.style.display = '';
+        document.getElementById('pos-label').style.display = '';
         console.warn('Positions error:', e);
       }
     }
