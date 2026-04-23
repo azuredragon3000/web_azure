@@ -146,6 +146,105 @@
       color: #e94560;
       text-decoration: none;
     }
+
+    /* Visitor Panel */
+    #visitor-panel {
+      position: fixed;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 190px;
+      background: #0d1117;
+      border: 1px solid #2a2a4a;
+      border-right: none;
+      border-radius: 12px 0 0 12px;
+      padding: 1rem;
+      z-index: 999;
+      display: flex;
+      flex-direction: column;
+      max-height: 420px;
+      box-shadow: -4px 0 20px rgba(0,0,0,0.5);
+    }
+
+    #visitor-panel .panel-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 0.8rem;
+    }
+
+    #visitor-panel .live-dot {
+      width: 7px;
+      height: 7px;
+      background: #4ade80;
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    #visitor-panel .panel-count {
+      font-size: 2.2rem;
+      font-weight: bold;
+      color: #fff;
+      font-family: monospace;
+      line-height: 1;
+    }
+
+    #visitor-panel .panel-label {
+      font-size: 0.7rem;
+      color: #555;
+      margin-bottom: 0.8rem;
+      margin-top: 0.2rem;
+    }
+
+    #visitor-panel .panel-divider {
+      border: none;
+      border-top: 1px solid #2a2a4a;
+      margin-bottom: 0.8rem;
+    }
+
+    #visitor-log {
+      overflow-y: auto;
+      flex: 1;
+      scrollbar-width: thin;
+      scrollbar-color: #2a2a4a transparent;
+    }
+
+    #visitor-log::-webkit-scrollbar { width: 4px; }
+    #visitor-log::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 4px; }
+
+    .log-entry {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      padding: 0.4rem 0;
+      border-bottom: 1px solid #1a1a2e;
+    }
+
+    .log-entry:last-child { border-bottom: none; }
+
+    .log-entry .log-dot {
+      width: 6px;
+      height: 6px;
+      background: #e94560;
+      border-radius: 50%;
+      margin-top: 4px;
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 768px) {
+      #visitor-panel { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -195,11 +294,74 @@
     </div>
   </section>
 
+  <!-- Visitor Panel -->
+  <div id="visitor-panel">
+    <div class="panel-header">
+      <span class="live-dot"></span> Visitors
+    </div>
+    <div id="visitor-count" class="panel-count">--</div>
+    <div class="panel-label">total visits</div>
+    <hr class="panel-divider">
+    <div id="visitor-log">
+      <div style="color:#555;font-size:0.72rem;">Loading...</div>
+    </div>
+  </div>
+
   <footer>
     <p>© 2026 MyName · Hosted on <a href="https://pages.github.com" target="_blank">GitHub Pages</a></p>
   </footer>
 
   <script>
+    /* ── Visitor Tracking ── */
+    const LOG_KEY    = 'visitor_log_web_azure';
+    const COUNTER_NS = 'azuredragon3000';
+    const COUNTER_KEY = 'web-azure-v1';
+
+    function getLog() {
+      try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); }
+      catch(e) { return []; }
+    }
+
+    function saveLog(log) {
+      try { localStorage.setItem(LOG_KEY, JSON.stringify(log)); } catch(e) {}
+    }
+
+    function renderLog(log) {
+      const el = document.getElementById('visitor-log');
+      if (!log.length) {
+        el.innerHTML = '<div style="color:#555;font-size:0.72rem;padding:0.3rem 0;">No history yet</div>';
+        return;
+      }
+      el.innerHTML = log.map(function(e) {
+        const d   = new Date(e.time);
+        const day = d.toLocaleDateString('vi-VN', {day:'2-digit', month:'2-digit'});
+        const tm  = d.toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
+        return '<div class="log-entry">'
+          + '<span class="log-dot"></span>'
+          + '<div>'
+          + '<div style="color:#ccc;font-size:0.72rem;">' + day + ' ' + tm + '</div>'
+          + '<div style="color:#555;font-size:0.68rem;">#' + e.count + '</div>'
+          + '</div></div>';
+      }).join('');
+    }
+
+    fetch('https://api.counterapi.dev/v1/' + COUNTER_NS + '/' + COUNTER_KEY + '/up')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        const count = data.count || data.value || 0;
+        document.getElementById('visitor-count').innerText = count.toLocaleString();
+        const log = getLog();
+        log.unshift({ time: new Date().toISOString(), count: count });
+        if (log.length > 50) log.pop();
+        saveLog(log);
+        renderLog(log);
+      })
+      .catch(function() {
+        document.getElementById('visitor-count').innerText = '?';
+        renderLog(getLog());
+      });
+
+    /* ── Bitcoin Price ── */
     const priceEl  = document.getElementById('btc-price');
     const statusEl = document.getElementById('btc-status');
     const dotEl    = document.getElementById('btc-dot');
