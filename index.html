@@ -350,37 +350,36 @@
       .then(function(r) { return r.json(); })
       .then(function(ipData) {
         var visitorIP = ipData.ip || 'unknown';
-
-        // Step 2: hit counter
-        fetch('https://api.counterapi.dev/v1/' + COUNTER_NS + '/' + COUNTER_KEY + '/up')
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
-            var count = data.count || data.value || 0;
-            document.getElementById('visitor-count').innerText = count.toLocaleString();
-            var log = getLog();
-            log.unshift({ time: new Date().toISOString(), count: count, ip: visitorIP });
-            if (log.length > 50) log.pop();
-            saveLog(log);
-            renderLog(log);
-          })
-          .catch(function() {
-            document.getElementById('visitor-count').innerText = '-';
-            var log = getLog();
-            log.unshift({ time: new Date().toISOString(), count: '-', ip: visitorIP });
-            if (log.length > 50) log.pop();
-            saveLog(log);
-            renderLog(log);
-          });
+        logVisit(visitorIP);
       })
       .catch(function() {
-        // IP fetch failed — still log the visit
-        document.getElementById('visitor-count').innerText = '-';
-        var log = getLog();
-        log.unshift({ time: new Date().toISOString(), count: '-', ip: 'unknown' });
-        if (log.length > 50) log.pop();
-        saveLog(log);
-        renderLog(log);
+        logVisit('unknown');
       });
+
+    function logVisit(visitorIP) {
+      // Local count — always reliable, shows 1 on first visit
+      var localCount = parseInt(localStorage.getItem('visit_total_web_azure') || '0') + 1;
+      localStorage.setItem('visit_total_web_azure', localCount);
+      document.getElementById('visitor-count').innerText = localCount;
+
+      // Save to log
+      var log = getLog();
+      log.unshift({ time: new Date().toISOString(), count: localCount, ip: visitorIP });
+      if (log.length > 50) log.pop();
+      saveLog(log);
+      renderLog(log);
+
+      // Try remote counter in background (update if works)
+      fetch('https://api.counterapi.dev/v1/' + COUNTER_NS + '/' + COUNTER_KEY + '/up')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var remoteCount = data.count || data.value;
+          if (remoteCount) {
+            document.getElementById('visitor-count').innerText = remoteCount.toLocaleString();
+          }
+        })
+        .catch(function() { /* giữ nguyên local count */ });
+    }
 
     /* ── Bitcoin Price ── */
     const priceEl  = document.getElementById('btc-price');
