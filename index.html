@@ -260,7 +260,7 @@
   </header>
 
   <section class="hero">
-    <h1>Hello, I'm <span>Your Name</span></h1>
+    <h1>Hello, <span>everyone</span></h1>
     <p>Welcome to my personal website. I build things for the web and love sharing what I learn.</p>
 
     <div style="margin-top: 2rem; background: #0d1117; border: 1px solid #f0b90b55; border-radius: 14px; padding: 2rem 2.5rem; min-width: 340px; text-align: center;">
@@ -313,9 +313,90 @@
 
   <script>
     /* ── Visitor Tracking ── */
-    const LOG_KEY     = 'visitor_log_web_azure';
-    const COUNTER_NS  = 'azuredragon3000';
-    const COUNTER_KEY = 'web-azure-v1';
+    var LOG_KEY = 'vlog_v3';
+
+    function getLog() {
+      try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch(e) { return []; }
+    }
+
+    function saveLog(log) {
+      try { localStorage.setItem(LOG_KEY, JSON.stringify(log)); } catch(e) {}
+    }
+
+    function renderLog(log) {
+      var el = document.getElementById('visitor-log');
+      if (!log.length) {
+        el.innerHTML = '<div style="color:#555;font-size:0.72rem;padding:0.3rem 0;">No visitors yet</div>';
+        return;
+      }
+      el.innerHTML = log.map(function(e) {
+        var d   = new Date(e.time);
+        var day = d.toLocaleDateString('vi-VN', {day:'2-digit', month:'2-digit'});
+        var tm  = d.toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
+        return '<div class="log-entry">'
+          + '<span class="log-dot"></span>'
+          + '<div>'
+          + '<div style="color:#4ade80;font-size:0.72rem;font-family:monospace;">' + e.ip + '</div>'
+          + '<div style="color:#666;font-size:0.67rem;">' + day + ' ' + tm + '</div>'
+          + '</div></div>';
+      }).join('');
+    }
+
+    function logVisit(visitorIP) {
+      var log = getLog();
+      var idx = -1;
+      for (var i = 0; i < log.length; i++) {
+        if (log[i].ip === visitorIP) { idx = i; break; }
+      }
+      if (idx !== -1) {
+        log[idx].time = new Date().toISOString(); // same IP: chỉ update time
+      } else {
+        log.unshift({ time: new Date().toISOString(), ip: visitorIP }); // IP mới
+        if (log.length > 50) log.pop();
+      }
+      saveLog(log);
+      document.getElementById('visitor-count').innerText = log.length;
+      renderLog(log);
+    }
+
+    fetch('https://api.ipify.org?format=json')
+      .then(function(r) { return r.json(); })
+      .then(function(d) { logVisit(d.ip || 'unknown'); })
+      .catch(function()  { logVisit('unknown'); });
+
+    /* ── Bitcoin Price ── */
+    var priceEl  = document.getElementById('btc-price');
+    var statusEl = document.getElementById('btc-status');
+    var dotEl    = document.getElementById('btc-dot');
+    var prevPrice = null;
+
+    function updatePrice() {
+      fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var price = parseFloat(data.price);
+          var formatted = '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          if (prevPrice !== null) {
+            priceEl.style.color = price > prevPrice ? '#4ade80' : price < prevPrice ? '#f87171' : '#ffffff';
+            setTimeout(function() { priceEl.style.color = '#ffffff'; }, 800);
+          }
+          priceEl.innerText = formatted;
+          prevPrice = price;
+          statusEl.innerText = 'Updated ' + new Date().toLocaleTimeString();
+          dotEl.style.background = '#4ade80';
+        })
+        .catch(function() {
+          statusEl.innerText = 'Connection error — retrying...';
+          dotEl.style.background = '#f87171';
+        });
+    }
+
+    updatePrice();
+    setInterval(updatePrice, 2000);
+  </script>
+
+</body>
+</html>
 
     function getLog() {
       try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); }
@@ -324,6 +405,52 @@
 
     function saveLog(log) {
       try { localStorage.setItem(LOG_KEY, JSON.stringify(log)); } catch(e) {}
+    }
+
+    function renderLog(log) {
+      var el = document.getElementById('visitor-log');
+      if (!log.length) {
+        el.innerHTML = '<div style="color:#555;font-size:0.72rem;padding:0.3rem 0;">No visitors yet</div>';
+        return;
+      }
+      el.innerHTML = log.map(function(e) {
+        var d   = new Date(e.time);
+        var day = d.toLocaleDateString('vi-VN', {day:'2-digit', month:'2-digit'});
+        var tm  = d.toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
+        return '<div class="log-entry">'
+          + '<span class="log-dot"></span>'
+          + '<div>'
+          + '<div style="color:#4ade80;font-size:0.72rem;font-family:monospace;">' + e.ip + '</div>'
+          + '<div style="color:#666;font-size:0.67rem;">' + day + ' ' + tm + '</div>'
+          + '</div></div>';
+      }).join('');
+    }
+
+    function logVisit(visitorIP) {
+      var log = getLog();
+      var idx = -1;
+      for (var i = 0; i < log.length; i++) {
+        if (log[i].ip === visitorIP) { idx = i; break; }
+      }
+
+      if (idx !== -1) {
+        // same IP: chỉ update thời gian, không thêm mới
+        log[idx].time = new Date().toISOString();
+      } else {
+        // IP mới: thêm vào đầu
+        log.unshift({ time: new Date().toISOString(), ip: visitorIP });
+        if (log.length > 50) log.pop();
+      }
+
+      saveLog(log);
+      document.getElementById('visitor-count').innerText = log.length;
+      renderLog(log);
+    }
+
+    fetch('https://api.ipify.org?format=json')
+      .then(function(r) { return r.json(); })
+      .then(function(d) { logVisit(d.ip || 'unknown'); })
+      .catch(function()  { logVisit('unknown'); });
     }
 
     function renderLog(log) {
