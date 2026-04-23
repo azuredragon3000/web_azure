@@ -55,6 +55,22 @@
     .down { color: #f87171; }
     .flat { color: #888; }
 
+    /* Positions section */
+    .section-label { max-width: 1100px; margin: 0 auto 0.5rem; font-size: 0.72rem; letter-spacing: 1.5px; text-transform: uppercase; color: #555; display: flex; align-items: center; gap: 0.5rem; }
+    .section-label span { color: #f0b90b; }
+    .pos-wrap { max-width: 1100px; margin: 0 auto 2rem; overflow-x: auto; border-radius: 8px; border: 1px solid #1e3a1e; }
+    .pos-wrap::-webkit-scrollbar { height: 4px; }
+    .pos-wrap::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 4px; }
+    .pos-table { width: 100%; border-collapse: collapse; min-width: 900px; }
+    .pos-table thead th { text-align: right; padding: 0.6rem 0.9rem; font-size: 0.68rem; letter-spacing: 1.2px; text-transform: uppercase; color: #555; border-bottom: 1px solid #1e3a1e; white-space: nowrap; background: #0a1a0a; }
+    .pos-table thead th:first-child { text-align: left; }
+    .pos-table tbody tr { border-bottom: 1px solid #0d200d; transition: background 0.15s; }
+    .pos-table tbody tr:hover { background: #0d1f0d; }
+    .pos-table tbody td { padding: 0.7rem 0.9rem; font-size: 0.88rem; white-space: nowrap; text-align: right; font-family: monospace; }
+    .pos-table tbody td:first-child { text-align: left; font-family: 'Segoe UI', sans-serif; }
+    .long-badge  { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 4px; background: #1a3a1a; color: #4ade80; font-size: 0.7rem; font-weight: 700; margin-left: 0.4rem; }
+    .short-badge { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 4px; background: #3a1a1a; color: #f87171; font-size: 0.7rem; font-weight: 700; margin-left: 0.4rem; }
+
     footer { background: #1a1a2e; text-align: center; padding: 1rem; color: #555; font-size: 0.8rem; border-top: 1px solid #2a2a4a; }
     footer a { color: #e94560; text-decoration: none; }
   </style>
@@ -72,6 +88,30 @@
   </header>
 
   <main>
+    <!-- ── My Futures Positions ── -->
+    <div class="section-label" id="pos-label" style="display:none">
+      <span>⚡ My Futures Positions</span>
+      <span id="pos-count" style="color:#555"></span>
+    </div>
+    <div class="pos-wrap" id="pos-wrap" style="display:none">
+      <table class="pos-table">
+        <thead>
+          <tr>
+            <th>Coin</th>
+            <th>Size</th>
+            <th>Entry Price</th>
+            <th>Mark Price</th>
+            <th>Liq Price</th>
+            <th>Unrealized PnL</th>
+            <th>ROE %</th>
+            <th>Leverage</th>
+            <th>Margin Type</th>
+          </tr>
+        </thead>
+        <tbody id="pos-body"></tbody>
+      </table>
+    </div>
+
     <div class="row">
       <span class="live-dot"></span>
       <h2 id="table-title">Watchlist</h2>
@@ -113,6 +153,84 @@
   </footer>
 
   <script>
+    /* ════════════════════════════════════════
+       BINANCE API CONFIG — điền key vào đây
+       Chỉ dùng Read-Only key + IP restriction
+    ════════════════════════════════════════ */
+    var BINANCE_API_KEY    = '';   // ← điền API key
+    var BINANCE_SECRET_KEY = '';   // ← điền Secret key
+
+    /* ── HMAC-SHA256 signing (Web Crypto API) ── */
+    async function hmac256(secret, message) {
+      var enc  = new TextEncoder();
+      var key  = await crypto.subtle.importKey('raw', enc.encode(secret), {name:'HMAC',hash:'SHA-256'}, false, ['sign']);
+      var sig  = await crypto.subtle.sign('HMAC', key, enc.encode(message));
+      return Array.from(new Uint8Array(sig)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+    }
+
+    async function binanceAuth(baseUrl, path, params) {
+      params = params || {};
+      params.timestamp = Date.now();
+      var qs  = Object.keys(params).map(function(k){ return k+'='+encodeURIComponent(params[k]); }).join('&');
+      var sig = await hmac256(BINANCE_SECRET_KEY, qs);
+      var url = baseUrl + path + '?' + qs + '&signature=' + sig;
+      var res = await fetch(url, { headers: { 'X-MBX-APIKEY': BINANCE_API_KEY } });
+      return res.json();
+    }
+
+    /* ── Fetch & render Futures Positions ── */
+    async function loadPositions() {
+      if (!BINANCE_API_KEY || !BINANCE_SECRET_KEY) return;
+      try {
+        var data = await binanceAuth('https://fapi.binance.com', '/fapi/v2/positionRisk');
+        var open = data.filter(function(p){ return parseFloat(p.positionAmt) !== 0; });
+
+        if (!open.length) return;
+
+        var rows = open.map(function(p) {
+          var amt      = parseFloat(p.positionAmt);
+          var isLong   = amt > 0;
+          var pnl      = parseFloat(p.unRealizedProfit);
+          var entry    = parseFloat(p.entryPrice);
+          var mark     = parseFloat(p.markPrice);
+          var liq      = parseFloat(p.liquidationPrice);
+          var lev      = p.leverage;
+          var margin   = p.marginType === 'cross' ? 'Cross' : 'Isolated';
+          var notional = Math.abs(amt) * mark;
+          var roe      = notional > 0 ? (pnl / (notional / parseFloat(lev)) * 100) : 0;
+          var lbl      = p.symbol.replace('USDT','');
+
+          return '<tr>'
+            + '<td><div style="display:flex;align-items:center;gap:0.4rem;">'
+            +   '<div class="coin-icon">' + lbl.substring(0,4) + '</div>'
+            +   '<div>'
+            +     '<div class="coin-symbol">' + lbl + '</div>'
+            +     (isLong ? '<span class="long-badge">LONG</span>' : '<span class="short-badge">SHORT</span>')
+            +   '</div>'
+            + '</div></td>'
+            + '<td>' + Math.abs(amt).toFixed(4) + '</td>'
+            + '<td>' + fmtPrice(entry) + '</td>'
+            + '<td>' + fmtPrice(mark)  + '</td>'
+            + '<td class="' + (liq > 0 ? 'down' : 'flat') + '">' + (liq > 0 ? fmtPrice(liq) : '--') + '</td>'
+            + '<td class="' + (pnl >= 0 ? 'up' : 'down') + '">' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' $</td>'
+            + '<td class="' + (roe >= 0 ? 'up' : 'down') + '">' + (roe >= 0 ? '+' : '') + roe.toFixed(2) + '%</td>'
+            + '<td>' + lev + 'x</td>'
+            + '<td style="color:#888;">' + margin + '</td>'
+            + '</tr>';
+        });
+
+        document.getElementById('pos-body').innerHTML = rows.join('');
+        document.getElementById('pos-count').innerText = '(' + open.length + ' open)';
+        document.getElementById('pos-wrap').style.display  = '';
+        document.getElementById('pos-label').style.display = '';
+
+        // Refresh positions every 5s
+        setTimeout(loadPositions, 5000);
+      } catch(e) {
+        console.warn('Positions error:', e);
+      }
+    }
+
     /* ── Helpers ── */
     function fmtPrice(p) {
       p = parseFloat(p);
@@ -334,6 +452,7 @@
     document.getElementById('table-title').innerText = '🚀 Top Gainers';
     loadRanking();
     initSnapshot(); // keep WS alive in background for potential future use
+    loadPositions(); // load futures positions if API key is set
   </script>
 
 </body>
