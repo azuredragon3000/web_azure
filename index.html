@@ -34,8 +34,14 @@
 
     table { width: 100%; border-collapse: collapse; min-width: 820px; }
     .table-wrap { max-width: 1100px; margin: 0 auto; overflow-x: auto; border-radius: 8px; }
-    .table-wrap::-webkit-scrollbar { height: 4px; }
+    .table-wrap::-webkit-scrollbar { height: 6px; }
     .table-wrap::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 4px; }
+    /* top scrollbar mirror */
+    .scroll-top { max-width:1100px; margin:0 auto; overflow-x:auto; overflow-y:hidden; height:10px; }
+    .scroll-top::-webkit-scrollbar { height:6px; }
+    .scroll-top::-webkit-scrollbar-thumb { background:#2a2a4a; border-radius:4px; }
+    .scroll-top::-webkit-scrollbar-track { background:#0d0d1a; }
+    .scroll-top-inner { height:1px; }
     thead th { text-align: left; padding: 0.7rem 0.9rem; font-size: 0.7rem; letter-spacing: 1.2px; text-transform: uppercase; color: #555; border-bottom: 1px solid #2a2a4a; white-space: nowrap; }
     thead th:not(:first-child) { text-align: right; }
     tbody tr { border-bottom: 1px solid #1a1a2e; transition: background 0.15s; }
@@ -258,8 +264,9 @@
       </table>
     </div>
 
+    <div class="scroll-top" id="ranking-scroll-top"><div class="scroll-top-inner" id="ranking-scroll-top-inner"></div></div>
     <div class="table-wrap" id="ranking-wrap">
-    <table>
+    <table id="ranking-table">
       <thead>
         <tr>
           <th>#&nbsp;Coin</th>
@@ -1262,6 +1269,33 @@
     loadPositions(); // load futures positions if API key is set
     loadBalance();   // load balance cards if API key is set
     loadFundingData(); // preload funding rates
+
+    /* ── Sync top/bottom scrollbars for ranking table ── */
+    (function() {
+      var top  = document.getElementById('ranking-scroll-top');
+      var bot  = document.getElementById('ranking-wrap');
+      var inner = document.getElementById('ranking-scroll-top-inner');
+      function syncWidth() {
+        var tbl = document.getElementById('ranking-table');
+        if (tbl) inner.style.width = tbl.offsetWidth + 'px';
+      }
+      syncWidth();
+      var fromTop = false, fromBot = false;
+      top.addEventListener('scroll', function() {
+        if (fromBot) { fromBot = false; return; }
+        fromTop = true;
+        bot.scrollLeft = top.scrollLeft;
+      });
+      bot.addEventListener('scroll', function() {
+        if (fromTop) { fromTop = false; return; }
+        fromBot = true;
+        top.scrollLeft = bot.scrollLeft;
+        syncWidth();
+      });
+      // also sync after table re-renders
+      var obs = new MutationObserver(syncWidth);
+      obs.observe(document.getElementById('table-body'), { childList: true, subtree: true });
+    })();
   </script>
 
 </body>
