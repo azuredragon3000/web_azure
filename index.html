@@ -359,11 +359,10 @@
       fetch('https://api.binance.com/api/v3/ticker/24hr')
         .then(function(r) { return r.json(); })
         .then(function(data) {
-          // Only USDT pairs, exclude stablecoins, min $10k volume
+          // Only USDT pairs, exclude stablecoin pairs
+          var STABLES = ['USDCUSDT','BUSDUSDT','TUSDUSDT','FDUSDUSDT','USDPUSDT','DAIUSDT','EURUSDT','GBPUSDT','AEURUSDT'];
           var filtered = data.filter(function(t) {
-            return t.symbol.endsWith('USDT')
-              && !['USDCUSDT','BUSDUSDT','TUSDUSDT','FDUSDUSDT','USDPUSDT','DAIUSDT'].includes(t.symbol)
-              && parseFloat(t.quoteVolume) > 10000;
+            return t.symbol.endsWith('USDT') && STABLES.indexOf(t.symbol) === -1;
           });
 
           filtered.sort(function(a, b) {
