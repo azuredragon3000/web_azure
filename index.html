@@ -345,6 +345,22 @@
       }).join('');
     }
 
+    // Clean up any duplicate IPs already in localStorage (from old version)
+    (function cleanOldLog() {
+      var log = getLog();
+      var seen = {};
+      var cleaned = [];
+      for (var i = 0; i < log.length; i++) {
+        if (!seen[log[i].ip]) {
+          seen[log[i].ip] = true;
+          cleaned.push(log[i]);
+        }
+      }
+      saveLog(cleaned);
+      // Fix stored total to match unique count
+      localStorage.setItem('visit_total_web_azure', cleaned.length);
+    })();
+
     // Step 1: get visitor IP
     fetch('https://api.ipify.org?format=json')
       .then(function(r) { return r.json(); })
@@ -357,26 +373,41 @@
       });
 
     function logVisit(visitorIP) {
-      // Local count — always reliable, shows 1 on first visit
-      var localCount = parseInt(localStorage.getItem('visit_total_web_azure') || '0') + 1;
-      localStorage.setItem('visit_total_web_azure', localCount);
-      document.getElementById('visitor-count').innerText = localCount;
-
-      // Save to log — deduplicate by IP (update existing entry if same IP)
       var log = getLog();
       var existing = -1;
       for (var i = 0; i < log.length; i++) {
         if (log[i].ip === visitorIP) { existing = i; break; }
       }
-      var entry = { time: new Date().toISOString(), count: localCount, ip: visitorIP };
+
       if (existing !== -1) {
-        log[existing] = entry;           // ghi đè entry cũ
+        // Same IP — update timestamp only, do NOT increment count
+        log[existing].time = new Date().toISOString();
+        saveLog(log);
+        var uniqueCount = log.length;
+        document.getElementById('visitor-count').innerText = uniqueCount;
+        renderLog(log);
       } else {
-        log.unshift(entry);              // IP mới → thêm lên đầu
+        // New IP — add and increment
+        var newCount = log.length + 1;
+        localStorage.setItem('visit_total_web_azure', newCount);
+        log.unshift({ time: new Date().toISOString(), count: newCount, ip: visitorIP });
         if (log.length > 50) log.pop();
+        saveLog(log);
+        document.getElementById('visitor-count').innerText = newCount;
+        renderLog(log);
       }
-      saveLog(log);
-      renderLog(log);
+
+      // Try remote counter in background (update if works)
+      fetch('https://api.counterapi.dev/v1/' + COUNTER_NS + '/' + COUNTER_KEY + '/up')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var remoteCount = data.count || data.value;
+          if (remoteCount) {
+            document.getElementById('visitor-count').innerText = remoteCount.toLocaleString();
+          }
+        })
+        .catch(function() { /* giữ nguyên local count */ });
+    }
 
       // Try remote counter in background (update if works)
       fetch('https://api.counterapi.dev/v1/' + COUNTER_NS + '/' + COUNTER_KEY + '/up')
