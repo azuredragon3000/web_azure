@@ -126,6 +126,11 @@
           <div class="bal-usd" id="bal-rpnl-usd">--</div>
           <div class="bal-vnd" id="bal-rpnl-vnd"></div>
         </div>
+        <div class="bal-card" id="bal-avbl">
+          <div class="bal-label">Available Balance</div>
+          <div class="bal-usd" id="bal-avbl-usd">--</div>
+          <div class="bal-vnd" id="bal-avbl-vnd"></div>
+        </div>
       </div>
     </div>
 
@@ -257,11 +262,14 @@
         var margin  = parseFloat(acct.totalMarginBalance   || 0);
         var wallet  = parseFloat(acct.totalWalletBalance   || 0);
         var upnl    = parseFloat(acct.totalUnrealizedProfit|| 0);
+        var avbl    = parseFloat(acct.availableBalance     || 0);
 
         document.getElementById('bal-margin-usd').innerText = '$' + margin.toFixed(2);
         document.getElementById('bal-margin-vnd').innerText = fmtVnd(margin);
         document.getElementById('bal-wallet-usd').innerText = '$' + wallet.toFixed(2);
         document.getElementById('bal-wallet-vnd').innerText = fmtVnd(wallet);
+        document.getElementById('bal-avbl-usd').innerText   = '$' + avbl.toFixed(2);
+        document.getElementById('bal-avbl-vnd').innerText   = fmtVnd(avbl);
         setPnlCard('bal-upnl', 'bal-upnl-usd', 'bal-upnl-vnd', upnl);
 
         // Today's realized PnL from income history
