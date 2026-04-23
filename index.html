@@ -295,6 +295,24 @@
       }
     }
 
+    /* ── Refresh Future Pos column in ranking table without re-fetching ── */
+    function refreshPosColumn() {
+      var rows = document.querySelectorAll('#table-body tr');
+      rows.forEach(function(row) {
+        var symEl = row.querySelector('.coin-symbol');
+        if (!symEl) return;
+        var lbl   = symEl.innerText.trim();
+        var cells = row.querySelectorAll('td');
+        var last  = cells[cells.length - 1];
+        if (!last) return;
+        var hasPos = openPositionSymbols.has(lbl);
+        last.style.textAlign  = 'center';
+        last.style.fontWeight = '700';
+        last.style.color      = hasPos ? '#4ade80' : '#444';
+        last.innerText        = hasPos ? 'YES' : '';
+      });
+    }
+
     /* ── Fetch & render Futures Positions ── */
     async function loadPositions() {
       if (!BINANCE_API_KEY || !BINANCE_SECRET_KEY) return;
@@ -312,6 +330,7 @@
 
         var open = data.filter(function(p){ return parseFloat(p.positionAmt) !== 0; });
         openPositionSymbols = new Set(open.map(function(p){ return p.symbol.replace('USDT',''); }));
+        refreshPosColumn();
 
         if (!open.length) return;
 
