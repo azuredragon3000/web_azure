@@ -193,7 +193,9 @@
       { symbol: 'LINKUSDT', name: 'Chainlink', icon: 'LINK' }
     ];
 
-    var prevPrices = {};
+    // state map: symbol -> { price, chg }
+    var state = {};
+    COINS.forEach(function(c) { state[c.symbol] = { price: null, chg: null, prev: null }; });
 
     function fmtPrice(p) {
       if (p >= 1000) return '$' + p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -211,54 +213,88 @@
       return v > 0 ? 'up' : v < 0 ? 'down' : 'flat';
     }
 
-    function updateTable(tickers) {
-      var map = {};
-      tickers.forEach(function(t) { map[t.symbol] = t; });
-
+    // Build table rows once (initial render)
+    function buildTable() {
       var rows = COINS.map(function(coin) {
-        var t = map[coin.symbol];
-        if (!t) return '';
-        var price = parseFloat(t.lastPrice);
-        var chg   = t.priceChangePercent;
-        var prev  = prevPrices[coin.symbol];
-        var flash = (prev !== undefined) ? (price > prev ? 'up' : price < prev ? 'down' : '') : '';
-        prevPrices[coin.symbol] = price;
-
-        return '<tr>'
+        return '<tr id="row-' + coin.symbol + '">'
           + '<td><div class="coin-cell">'
           +   '<div class="coin-icon">' + coin.icon.substring(0, 3) + '</div>'
           +   '<div><div class="coin-symbol">' + coin.icon + '</div>'
           +       '<div class="coin-name">' + coin.name + '</div></div>'
           + '</div></td>'
-          + '<td class="price ' + flash + '" id="p-' + coin.symbol + '">' + fmtPrice(price) + '</td>'
-          + '<td class="chg ' + chgClass(chg) + '">' + fmtChg(chg) + '</td>'
+          + '<td class="price" id="p-' + coin.symbol + '">--</td>'
+          + '<td class="chg flat" id="c-' + coin.symbol + '">--</td>'
           + '</tr>';
       });
-
       document.getElementById('coin-table-body').innerHTML = rows.join('');
-
-      COINS.forEach(function(coin) {
-        var el = document.getElementById('p-' + coin.symbol);
-        if (el && (el.classList.contains('up') || el.classList.contains('down'))) {
-          setTimeout(function() { if (el) el.classList.remove('up', 'down'); }, 700);
-        }
-      });
-
-      document.getElementById('update-time').innerText = 'Updated ' + new Date().toLocaleTimeString();
     }
 
-    function fetchPrices() {
+    // Update only the changed cells (no full re-render)
+    function updateCoin(symbol, price, chg) {
+      var s = state[symbol];
+      var priceEl = document.getElementById('p-' + symbol);
+      var chgEl   = document.getElementById('c-' + symbol);
+      if (!priceEl || !chgEl) return;
+
+      if (s.prev !== null && price !== s.prev) {
+        var flash = price > s.prev ? 'up' : 'down';
+        priceEl.className = 'price ' + flash;
+        setTimeout(function() { priceEl.className = 'price'; }, 700);
+      }
+      s.prev  = price;
+      s.price = price;
+      s.chg   = chg;
+
+      priceEl.innerText = fmtPrice(price);
+      chgEl.className   = 'chg ' + chgClass(chg);
+      chgEl.innerText   = fmtChg(chg);
+    }
+
+    // ── WebSocket: real-time stream ──
+    var streams = COINS.map(function(c) { return c.symbol.toLowerCase() + '@ticker'; }).join('/');
+    var ws;
+
+    function connectWS() {
+      ws = new WebSocket('wss://stream.binance.com:9443/stream?streams=' + streams);
+
+      ws.onopen = function() {
+        document.getElementById('update-time').innerText = 'Live ●';
+        document.getElementById('update-time').style.color = '#4ade80';
+      };
+
+      ws.onmessage = function(evt) {
+        var msg = JSON.parse(evt.data);
+        var d   = msg.data;
+        if (!d) return;
+        updateCoin(d.s, parseFloat(d.c), d.P);
+        document.getElementById('update-time').innerText = 'Live · ' + new Date().toLocaleTimeString();
+      };
+
+      ws.onerror = ws.onclose = function() {
+        document.getElementById('update-time').innerText = 'Reconnecting...';
+        document.getElementById('update-time').style.color = '#555';
+        setTimeout(connectWS, 3000); // reconnect on disconnect
+      };
+    }
+
+    // ── Initial snapshot via REST so table shows data immediately ──
+    function initSnapshot() {
       var symbols = JSON.stringify(COINS.map(function(c) { return c.symbol; }));
       fetch('https://api.binance.com/api/v3/ticker/24hr?symbols=' + encodeURIComponent(symbols))
         .then(function(r) { return r.json(); })
-        .then(function(data) { updateTable(data); })
+        .then(function(data) {
+          data.forEach(function(t) {
+            updateCoin(t.symbol, parseFloat(t.lastPrice), t.priceChangePercent);
+          });
+          connectWS();
+        })
         .catch(function() {
-          document.getElementById('update-time').innerText = 'Connection error — retrying...';
+          connectWS(); // still try WS even if REST fails
         });
     }
 
-    fetchPrices();
-    setInterval(fetchPrices, 3000);
+    buildTable();
+    initSnapshot();
   </script>
 
 </body>
