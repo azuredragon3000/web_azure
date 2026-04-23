@@ -709,7 +709,7 @@
         if (lr && lr.code) { setShortStatus(symbol, 'ERR', lr.msg || 'Lev err'); return; }
         setShortStatus(symbol, 'WORKING', 'Placing...');
         var order = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/order', {
-          symbol: symbol, side: 'SELL', type: 'LIMIT',
+          symbol: symbol, side: 'SELL', positionSide: 'SHORT', type: 'LIMIT',
           timeInForce: 'GTC', quantity: qty, price: limitPx
         });
         if (order.code) { setShortStatus(symbol, 'ERR', order.msg || ('Err ' + order.code)); return; }
