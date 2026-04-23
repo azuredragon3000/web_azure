@@ -14,7 +14,7 @@
 
     main { flex: 1; padding: 2rem 1.5rem; background: linear-gradient(135deg, #1a1a2e 0%, #0f0f0f 100%); }
 
-    .row { display: flex; align-items: center; gap: 0.6rem; max-width: 700px; margin: 0 auto 0.8rem; flex-wrap: wrap; }
+    .row { display: flex; align-items: center; gap: 0.6rem; max-width: 1100px; margin: 0 auto 0.8rem; flex-wrap: wrap; }
 
     .live-dot { width: 8px; height: 8px; background: #4ade80; border-radius: 50%; animation: pulse 1.5s infinite; flex-shrink: 0; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
@@ -22,29 +22,34 @@
     h2 { font-size: 1rem; font-weight: 600; color: #f0b90b; letter-spacing: 1px; text-transform: uppercase; }
     .update-time { font-size: 0.72rem; color: #555; margin-left: auto; }
 
-    .tabs { display: flex; gap: 0.4rem; max-width: 700px; margin: 0 auto 0.5rem; flex-wrap: wrap; }
+    .tabs { display: flex; gap: 0.4rem; max-width: 1100px; margin: 0 auto 0.5rem; flex-wrap: wrap; }
     .tab-btn { padding: 0.4rem 1.1rem; border-radius: 20px; border: 1px solid #2a2a4a; background: transparent; color: #888; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; }
     .tab-btn.active { background: #e94560; border-color: #e94560; color: #fff; font-weight: 600; }
     .tab-btn:hover:not(.active) { border-color: #555; color: #ccc; }
 
-    .subtabs { display: none; gap: 0.3rem; max-width: 700px; margin: 0 auto 0.8rem; }
+    .subtabs { display: none; gap: 0.3rem; max-width: 1100px; margin: 0 auto 0.8rem; }
     .subtabs.show { display: flex; }
     .subtab-btn { padding: 0.3rem 0.9rem; border-radius: 20px; border: 1px solid #2a2a4a; background: transparent; color: #888; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; }
     .subtab-btn.active { background: #0f3460; border-color: #4ade80; color: #4ade80; }
 
-    table { width: 100%; max-width: 700px; margin: 0 auto; border-collapse: collapse; }
-    thead th { text-align: left; padding: 0.7rem 1rem; font-size: 0.72rem; letter-spacing: 1.5px; text-transform: uppercase; color: #555; border-bottom: 1px solid #2a2a4a; }
+    table { width: 100%; border-collapse: collapse; min-width: 820px; }
+    .table-wrap { max-width: 1100px; margin: 0 auto; overflow-x: auto; border-radius: 8px; }
+    .table-wrap::-webkit-scrollbar { height: 4px; }
+    .table-wrap::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 4px; }
+    thead th { text-align: left; padding: 0.7rem 0.9rem; font-size: 0.7rem; letter-spacing: 1.2px; text-transform: uppercase; color: #555; border-bottom: 1px solid #2a2a4a; white-space: nowrap; }
     thead th:not(:first-child) { text-align: right; }
     tbody tr { border-bottom: 1px solid #1a1a2e; transition: background 0.15s; }
     tbody tr:hover { background: #1a1a2e; }
-    tbody td { padding: 0.8rem 1rem; font-size: 0.95rem; }
+    tbody td { padding: 0.75rem 0.9rem; font-size: 0.88rem; white-space: nowrap; }
 
     .coin-cell { display: flex; align-items: center; gap: 0.6rem; }
     .coin-icon { width: 28px; height: 28px; border-radius: 50%; background: #2a2a4a; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: bold; color: #f0b90b; flex-shrink: 0; }
     .coin-symbol { font-weight: 600; color: #fff; }
     .coin-name { font-size: 0.72rem; color: #555; }
 
-    td.price { text-align: right; font-family: monospace; font-size: 1rem; font-weight: 600; color: #fff; transition: color 0.5s; }
+    td.price { text-align: right; font-family: monospace; font-size: 0.95rem; font-weight: 600; color: #fff; transition: color 0.5s; }
+    td.mono  { text-align: right; font-family: monospace; font-size: 0.82rem; color: #aaa; }
+    td.fee   { text-align: right; font-family: monospace; font-size: 0.82rem; color: #888; }
     td.chg { text-align: right; font-family: monospace; font-weight: 600; font-size: 0.9rem; }
     .up   { color: #4ade80; }
     .down { color: #f87171; }
@@ -83,18 +88,24 @@
       <button class="subtab-btn active" onclick="switchMarket('futures',this)">Futures</button>
     </div>
 
+    <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th>Coin</th>
+          <th>#&nbsp;Coin</th>
           <th>Price (USDT)</th>
           <th>24h Chg %</th>
+          <th>Tick Size</th>
+          <th>Min Notional</th>
+          <th>Taker Fee</th>
+          <th>Maker Fee</th>
         </tr>
       </thead>
       <tbody id="table-body">
-        <tr><td colspan="3" style="text-align:center;color:#555;padding:2rem;">Loading...</td></tr>
+        <tr><td colspan="7" style="text-align:center;color:#555;padding:2rem;">Loading...</td></tr>
       </tbody>
     </table>
+    </div>
   </main>
 
   <footer>
@@ -218,44 +229,82 @@
     /* ── GAINERS / LOSERS (Spot or Futures) ── */
     var STABLES = ['USDCUSDT','BUSDUSDT','TUSDUSDT','FDUSDUSDT','USDPUSDT','DAIUSDT','EURUSDT','GBPUSDT','AEURUSDT'];
 
+    // Cache exchangeInfo per market so we only fetch once
+    var exInfoCache = { futures: null, spot: null };
+
+    function getExchangeInfo(market) {
+      if (exInfoCache[market]) return Promise.resolve(exInfoCache[market]);
+      var url = market === 'futures'
+        ? 'https://fapi.binance.com/fapi/v1/exchangeInfo'
+        : 'https://api.binance.com/api/v3/exchangeInfo';
+      return fetch(url)
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+          // Build map: symbol -> { tickSize, minNotional, takerFee, makerFee }
+          var map = {};
+          (data.symbols || []).forEach(function(s) {
+            var tick = '--', minN = '--', taker = '--', maker = '--';
+            (s.filters || []).forEach(function(f) {
+              if (f.filterType === 'PRICE_FILTER')  tick = parseFloat(f.tickSize);
+              if (f.filterType === 'MIN_NOTIONAL')  minN = parseFloat(f.notional || f.minNotional || 0);
+            });
+            // Futures exchangeInfo has takerCommissionRate / makerCommissionRate
+            if (s.takerCommissionRate !== undefined) taker = (parseFloat(s.takerCommissionRate) * 100).toFixed(4) + '%';
+            if (s.makerCommissionRate !== undefined) maker = (parseFloat(s.makerCommissionRate) * 100).toFixed(4) + '%';
+            // Spot doesn't expose per-symbol fees in public API — show standard
+            if (taker === '--' && market === 'spot') { taker = '0.1000%'; maker = '0.1000%'; }
+            if (taker === '--' && market === 'futures') { taker = '0.0500%'; maker = '0.0200%'; }
+            map[s.symbol] = { tick: tick, minN: minN, taker: taker, maker: maker };
+          });
+          exInfoCache[market] = map;
+          return map;
+        });
+    }
+
+    function fmtTick(v) {
+      if (v === '--') return '--';
+      // Strip trailing zeros e.g. 0.10000000 -> 0.1
+      return parseFloat(v).toString();
+    }
+
+    function fmtMinN(v) {
+      if (v === '--' || v === 0) return '--';
+      return '$' + parseFloat(v).toLocaleString('en-US', {maximumFractionDigits:2});
+    }
+
     function loadRanking() {
       var isGainers = currentTab === 'gainers';
+      var market = currentMarket;
       document.getElementById('update-time').innerText = 'Loading...';
       document.getElementById('update-time').style.color = '#555';
       document.getElementById('table-body').innerHTML =
-        '<tr><td colspan="3" style="text-align:center;color:#555;padding:2rem;">Fetching data...</td></tr>';
+        '<tr><td colspan="7" style="text-align:center;color:#555;padding:2rem;">Fetching data...</td></tr>';
 
-      var url = currentMarket === 'futures'
-        ? 'https://fapi.binance.com/fapi/v1/ticker/24hr'          // Futures (USDT-M)
-        : 'https://api.binance.com/api/v3/ticker/24hr';            // Spot
+      var tickerUrl = market === 'futures'
+        ? 'https://fapi.binance.com/fapi/v1/ticker/24hr'
+        : 'https://api.binance.com/api/v3/ticker/24hr';
 
-      fetch(url)
-        .then(function(r){ return r.json(); })
-        .then(function(data) {
-          var list;
-          if (currentMarket === 'futures') {
-            // Futures: field names are lastPrice / priceChangePercent
-            list = data.filter(function(t){
-              return t.symbol.endsWith('USDT') && STABLES.indexOf(t.symbol) === -1;
-            });
-            list.sort(function(a,b){
-              var diff = parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent);
-              return isGainers ? diff : -diff;
-            });
-          } else {
-            list = data.filter(function(t){
-              return t.symbol.endsWith('USDT') && STABLES.indexOf(t.symbol) === -1;
-            });
-            list.sort(function(a,b){
-              var diff = parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent);
-              return isGainers ? diff : -diff;
-            });
-          }
+      Promise.all([
+        fetch(tickerUrl).then(function(r){ return r.json(); }),
+        getExchangeInfo(market)
+      ])
+        .then(function(results) {
+          var data   = results[0];
+          var exInfo = results[1];
+
+          var list = data.filter(function(t){
+            return t.symbol.endsWith('USDT') && STABLES.indexOf(t.symbol) === -1;
+          });
+          list.sort(function(a,b){
+            var diff = parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent);
+            return isGainers ? diff : -diff;
+          });
 
           var top20 = list.slice(0, 20);
           var accentColor = isGainers ? '#4ade80' : '#f87171';
           var rows = top20.map(function(t, i) {
             var lbl = t.symbol.replace('USDT','');
+            var ei  = exInfo[t.symbol] || { tick:'--', minN:'--', taker:'--', maker:'--' };
             return '<tr>'
               + '<td><div class="coin-cell">'
               +   '<div class="coin-icon" style="color:'+accentColor+';font-size:0.75rem;">'+(i+1)+'</div>'
@@ -263,17 +312,20 @@
               + '</div></td>'
               + '<td class="price">'+fmtPrice(t.lastPrice)+'</td>'
               + '<td class="chg '+chgClass(t.priceChangePercent)+'">'+fmtChg(t.priceChangePercent)+'</td>'
+              + '<td class="mono">'+fmtTick(ei.tick)+'</td>'
+              + '<td class="mono">'+fmtMinN(ei.minN)+'</td>'
+              + '<td class="fee">'+ei.taker+'</td>'
+              + '<td class="fee">'+ei.maker+'</td>'
               + '</tr>';
           });
 
           document.getElementById('table-body').innerHTML = rows.join('');
-          var market = currentMarket === 'futures' ? 'Futures' : 'Spot';
-          document.getElementById('update-time').innerText = market + ' · ' + new Date().toLocaleTimeString();
+          document.getElementById('update-time').innerText = (market==='futures'?'Futures':'Spot') + ' · ' + new Date().toLocaleTimeString();
           document.getElementById('update-time').style.color = '#555';
         })
         .catch(function() {
           document.getElementById('table-body').innerHTML =
-            '<tr><td colspan="3" style="text-align:center;color:#f87171;padding:2rem;">Failed to load — try again</td></tr>';
+            '<tr><td colspan="7" style="text-align:center;color:#f87171;padding:2rem;">Failed to load — try again</td></tr>';
         });
     }
 
