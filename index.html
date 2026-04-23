@@ -85,6 +85,16 @@
     .long-badge  { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 4px; background: #1a3a1a; color: #4ade80; font-size: 0.7rem; font-weight: 700; margin-left: 0.4rem; }
     .short-badge { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 4px; background: #3a1a1a; color: #f87171; font-size: 0.7rem; font-weight: 700; margin-left: 0.4rem; }
 
+    /* Position History panel */
+    .pos-hist-wrap { max-width: 1100px; margin: 0 auto 2rem; overflow-x: auto; border-radius: 8px; border: 1px solid #1e2d3d; display: none; }
+    .pos-hist-table { width: 100%; border-collapse: collapse; min-width: 500px; }
+    .pos-hist-table thead th { padding: 0.6rem 0.9rem; font-size: 0.68rem; letter-spacing: 1.2px; text-transform: uppercase; color: #555; border-bottom: 1px solid #1e2d3d; background: #0a0f1a; white-space: nowrap; text-align: left; }
+    .pos-hist-table thead th:not(:first-child) { text-align: right; }
+    .pos-hist-table tbody tr { border-bottom: 1px solid #0d111a; transition: background 0.15s; }
+    .pos-hist-table tbody tr:hover { background: #0d1320; }
+    .pos-hist-table tbody td { padding: 0.65rem 0.9rem; font-size: 0.86rem; white-space: nowrap; font-family: monospace; text-align: right; }
+    .pos-hist-table tbody td:first-child { text-align: left; font-family: 'Segoe UI', sans-serif; font-weight: 600; color: #e0e0e0; }
+
     footer { background: #1a1a2e; text-align: center; padding: 1rem; color: #555; font-size: 0.8rem; border-top: 1px solid #2a2a4a; }
     footer a { color: #e94560; text-decoration: none; }
   </style>
@@ -168,6 +178,7 @@
     <div class="tabs">
       <button class="tab-btn active" onclick="switchTab('gainers',this)">🚀 Gainers</button>
       <button class="tab-btn" onclick="switchTab('losers',this)">📉 Losers</button>
+      <button class="tab-btn" onclick="switchTab('poshistory',this)">📋 Position History</button>
     </div>
 
     <div class="subtabs" id="subtabs">
@@ -175,7 +186,23 @@
       <button class="subtab-btn active" onclick="switchMarket('futures',this)">Futures</button>
     </div>
 
-    <div class="table-wrap">
+    <!-- Position History panel -->
+    <div class="pos-hist-wrap" id="pos-hist-wrap">
+      <table class="pos-hist-table">
+        <thead>
+          <tr>
+            <th>Coin</th>
+            <th>Realized PnL</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+        <tbody id="pos-hist-body">
+          <tr><td colspan="3" style="text-align:center;color:#555;padding:2rem;">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="table-wrap" id="ranking-wrap">
     <table>
       <thead>
         <tr>
@@ -403,8 +430,19 @@
       currentTab = tab;
       document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
       btn.classList.add('active');
-      document.getElementById('table-title').innerText = tab === 'gainers' ? '🚀 Top Gainers' : '📉 Top Losers';
-      loadRanking();
+
+      var isPosHist = tab === 'poshistory';
+      document.getElementById('ranking-wrap').style.display  = isPosHist ? 'none' : '';
+      document.getElementById('subtabs').style.display       = isPosHist ? 'none' : '';
+      document.getElementById('pos-hist-wrap').style.display = isPosHist ? ''     : 'none';
+
+      if (isPosHist) {
+        document.getElementById('table-title').innerText = '📋 Position History';
+        loadPosHistory();
+      } else {
+        document.getElementById('table-title').innerText = tab === 'gainers' ? '🚀 Top Gainers' : '📉 Top Losers';
+        loadRanking();
+      }
     }
 
     function switchMarket(market, btn) {
@@ -600,6 +638,47 @@
           document.getElementById('table-body').innerHTML =
             '<tr><td colspan="8" style="text-align:center;color:#f87171;padding:2rem;">Failed to load — try again</td></tr>';
         });
+    }
+
+    /* ── Position History ── */
+    async function loadPosHistory() {
+      if (!BINANCE_API_KEY || !BINANCE_SECRET_KEY) {
+        document.getElementById('pos-hist-body').innerHTML =
+          '<tr><td colspan="3" style="text-align:center;color:#f87171;padding:2rem;">API key not set</td></tr>';
+        return;
+      }
+      document.getElementById('pos-hist-body').innerHTML =
+        '<tr><td colspan="3" style="text-align:center;color:#555;padding:2rem;">Loading...</td></tr>';
+      try {
+        // Fetch last 100 REALIZED_PNL income events — each represents a reduce/close trade
+        var income = await binanceAuth('https://fapi.binance.com', '/fapi/v1/income', {
+          incomeType: 'REALIZED_PNL',
+          limit: 100
+        });
+        if (!Array.isArray(income) || !income.length) {
+          document.getElementById('pos-hist-body').innerHTML =
+            '<tr><td colspan="3" style="text-align:center;color:#555;padding:2rem;">No history found</td></tr>';
+          return;
+        }
+        // Newest first
+        income.sort(function(a,b){ return b.time - a.time; });
+        var rows = income.map(function(item) {
+          var lbl = item.symbol ? item.symbol.replace('USDT','') : '--';
+          var pnl = parseFloat(item.income || 0);
+          var t   = new Date(item.time);
+          var ts  = t.toLocaleDateString('vi-VN') + ' ' + t.toLocaleTimeString('vi-VN', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+          var cls = pnl > 0 ? 'up' : pnl < 0 ? 'down' : 'flat';
+          return '<tr>'
+            + '<td>' + lbl + '</td>'
+            + '<td class="' + cls + '">' + (pnl >= 0 ? '+' : '') + pnl.toFixed(4) + ' $</td>'
+            + '<td style="color:#666;">' + ts + '</td>'
+            + '</tr>';
+        });
+        document.getElementById('pos-hist-body').innerHTML = rows.join('');
+      } catch(e) {
+        document.getElementById('pos-hist-body').innerHTML =
+          '<tr><td colspan="3" style="text-align:center;color:#f87171;padding:2rem;">Error: ' + (e.message||e) + '</td></tr>';
+      }
     }
 
     /* ── Init ── */
