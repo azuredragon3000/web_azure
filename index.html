@@ -155,7 +155,7 @@
         <thead>
           <tr>
             <th>Coin</th>
-            <th>Size</th>
+            <th id="pos-size-th" onclick="sortPositions()" style="cursor:pointer;user-select:none;">Size <span id="pos-size-arrow">↓</span></th>
             <th>Entry Price</th>
             <th>Mark Price</th>
             <th>Liq Price</th>
@@ -324,6 +324,54 @@
       }
     }
 
+    /* ── Positions sort state ── */
+    var openPositions  = [];
+    var posSortAsc     = false; // default: high → low
+
+    function sortPositions() {
+      posSortAsc = !posSortAsc;
+      document.getElementById('pos-size-arrow').innerText = posSortAsc ? '↑' : '↓';
+      renderPositions();
+    }
+
+    function renderPositions() {
+      var sorted = openPositions.slice().sort(function(a, b) {
+        var diff = Math.abs(parseFloat(a.positionAmt)) - Math.abs(parseFloat(b.positionAmt));
+        return posSortAsc ? diff : -diff;
+      });
+      var rows = sorted.map(function(p) {
+        var amt      = parseFloat(p.positionAmt);
+        var isLong   = amt > 0;
+        var pnl      = parseFloat(p.unRealizedProfit);
+        var entry    = parseFloat(p.entryPrice);
+        var mark     = parseFloat(p.markPrice);
+        var liq      = parseFloat(p.liquidationPrice);
+        var lev      = p.leverage;
+        var margin   = p.marginType === 'cross' ? 'Cross' : 'Isolated';
+        var notional = Math.abs(amt) * mark;
+        var roe      = notional > 0 ? (pnl / (notional / parseFloat(lev)) * 100) : 0;
+        var lbl      = p.symbol.replace('USDT','');
+        return '<tr>'
+          + '<td><div style="display:flex;align-items:center;gap:0.4rem;">'
+          +   '<div class="coin-icon">' + lbl.substring(0,4) + '</div>'
+          +   '<div>'
+          +     '<div class="coin-symbol">' + lbl + '</div>'
+          +     (isLong ? '<span class="long-badge">LONG</span>' : '<span class="short-badge">SHORT</span>')
+          +   '</div>'
+          + '</div></td>'
+          + '<td>' + Math.abs(amt).toFixed(4) + '</td>'
+          + '<td>' + fmtPrice(entry) + '</td>'
+          + '<td>' + fmtPrice(mark)  + '</td>'
+          + '<td class="' + (liq > 0 ? 'down' : 'flat') + '">' + (liq > 0 ? fmtPrice(liq) : '--') + '</td>'
+          + '<td class="' + (pnl >= 0 ? 'up' : 'down') + '">' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' $</td>'
+          + '<td class="' + (roe >= 0 ? 'up' : 'down') + '">' + (roe >= 0 ? '+' : '') + roe.toFixed(2) + '%</td>'
+          + '<td>' + lev + 'x</td>'
+          + '<td style="color:#888;">' + margin + '</td>'
+          + '</tr>';
+      });
+      document.getElementById('pos-body').innerHTML = rows.join('');
+    }
+
     /* ── Refresh Future Pos column in ranking table without re-fetching ── */
     function refreshPosColumn() {
       var rows = document.querySelectorAll('#table-body tr');
@@ -363,39 +411,8 @@
 
         if (!open.length) return;
 
-        var rows = open.map(function(p) {
-          var amt      = parseFloat(p.positionAmt);
-          var isLong   = amt > 0;
-          var pnl      = parseFloat(p.unRealizedProfit);
-          var entry    = parseFloat(p.entryPrice);
-          var mark     = parseFloat(p.markPrice);
-          var liq      = parseFloat(p.liquidationPrice);
-          var lev      = p.leverage;
-          var margin   = p.marginType === 'cross' ? 'Cross' : 'Isolated';
-          var notional = Math.abs(amt) * mark;
-          var roe      = notional > 0 ? (pnl / (notional / parseFloat(lev)) * 100) : 0;
-          var lbl      = p.symbol.replace('USDT','');
-
-          return '<tr>'
-            + '<td><div style="display:flex;align-items:center;gap:0.4rem;">'
-            +   '<div class="coin-icon">' + lbl.substring(0,4) + '</div>'
-            +   '<div>'
-            +     '<div class="coin-symbol">' + lbl + '</div>'
-            +     (isLong ? '<span class="long-badge">LONG</span>' : '<span class="short-badge">SHORT</span>')
-            +   '</div>'
-            + '</div></td>'
-            + '<td>' + Math.abs(amt).toFixed(4) + '</td>'
-            + '<td>' + fmtPrice(entry) + '</td>'
-            + '<td>' + fmtPrice(mark)  + '</td>'
-            + '<td class="' + (liq > 0 ? 'down' : 'flat') + '">' + (liq > 0 ? fmtPrice(liq) : '--') + '</td>'
-            + '<td class="' + (pnl >= 0 ? 'up' : 'down') + '">' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' $</td>'
-            + '<td class="' + (roe >= 0 ? 'up' : 'down') + '">' + (roe >= 0 ? '+' : '') + roe.toFixed(2) + '%</td>'
-            + '<td>' + lev + 'x</td>'
-            + '<td style="color:#888;">' + margin + '</td>'
-            + '</tr>';
-        });
-
-        document.getElementById('pos-body').innerHTML = rows.join('');
+        openPositions = open;
+        renderPositions();
         document.getElementById('pos-count').innerText = '(' + open.length + ' open)';
         document.getElementById('pos-wrap').style.display  = '';
         document.getElementById('pos-label').style.display = '';
