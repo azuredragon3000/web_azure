@@ -179,6 +179,15 @@
       <button onclick="unlockPage()" style="padding:0.6rem;border-radius:6px;border:none;background:#e94560;color:#fff;font-size:0.9rem;font-weight:600;cursor:pointer;">Unlock</button>
       <div id="lock-status" style="font-size:0.78rem;color:#f0b90b;text-align:center;min-height:1.2em;"></div>
     </div>
+    <!-- IP warning box -->
+    <div style="width:100%;max-width:360px;background:#1a0f00;border:1px solid #7c4a00;border-radius:8px;padding:0.75rem 1rem;display:flex;flex-direction:column;gap:0.35rem;">
+      <div style="font-size:0.72rem;color:#f0b90b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">&#9888; Binance API IP Whitelist</div>
+      <div style="font-size:0.78rem;color:#aaa;">Your current IP — add to Binance API if requests fail:</div>
+      <div style="display:flex;align-items:center;gap:0.5rem;">
+        <code id="lock-ip-display" style="font-size:0.9rem;color:#f0f0f0;background:#0d0a00;padding:0.3rem 0.6rem;border-radius:4px;flex:1;letter-spacing:1px;">fetching...</code>
+        <button onclick="copyLockIp()" title="Copy IP" style="padding:0.3rem 0.6rem;border-radius:4px;border:1px solid #555;background:transparent;color:#aaa;font-size:0.75rem;cursor:pointer;">copy</button>
+      </div>
+    </div>
   </div>
 
   <main id="main-content" style="display:none;">
@@ -1690,6 +1699,26 @@
       var custom = localStorage.getItem('_pk');
       return custom ? (p === atob(custom)) : (p === _d(['cGNo','MWhj','']));
     }
+    // Fetch public IP for lock screen warning
+    (function fetchLockIp() {
+      fetch('https://api.ipify.org?format=json')
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          var el = document.getElementById('lock-ip-display');
+          if (el) el.textContent = d.ip || 'unknown';
+        })
+        .catch(function(){
+          var el = document.getElementById('lock-ip-display');
+          if (el) el.textContent = 'unavailable';
+        });
+    })();
+    function copyLockIp() {
+      var ip = (document.getElementById('lock-ip-display') || {}).textContent || '';
+      if (ip && ip !== 'fetching...' && ip !== 'unavailable') {
+        navigator.clipboard.writeText(ip).catch(function(){});
+      }
+    }
+
     function lockPage() {
       _unlocked = false;
       localStorage.removeItem('unlocked');
