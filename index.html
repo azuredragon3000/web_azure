@@ -474,6 +474,7 @@
     var posSortCol     = 'size';
     var posSortAsc     = false; // default: high → low
     var tpInFlight     = new Set(); // symbols where autoSetTP is currently running
+    var tpLastAttempt  = {};        // symbol -> timestamp of last autoSetTP attempt
 
     var posSortKeys = {
       size:     function(p){ return Math.abs(parseFloat(p.positionAmt)); },
@@ -592,11 +593,7 @@
                     })(),
           tpsl:     '<td style="text-align:center;font-weight:700;">' + (function(){
                       var tp = tpMap[p.symbol];
-                      if (!tp) {
-                        if (algoOnlySymbols.has(p.symbol))
-                          return '<span style="color:#f0b90b;font-size:0.72rem;" title="Binance requires Algo API for this symbol — set TP manually in Binance app">⚠ Manual</span>';
-                        return '<span style="color:#555;">-</span>';
-                      }
+                      if (!tp) return '<span style="color:#555;">-</span>';
                       return '<span style="color:#4ade80;">YES</span>'
                         + (tp.price ? '<br><span style="font-size:0.68rem;color:#888;">@$'+parseFloat(tp.price).toPrecision(4)+'</span>' : '');
                     })() + '</td>',
@@ -757,6 +754,8 @@
               var ss = shortStatuses[p.symbol];
               if (ss && (ss.state === 'PENDING' || ss.state === 'WORKING')) return; // order or TP in flight
               if (tpInFlight.has(p.symbol)) return; // autoSetTP currently running
+              // Throttle: wait 30s between attempts
+              if (tpLastAttempt[p.symbol] && (Date.now() - tpLastAttempt[p.symbol]) < 30000) return;
               console.log('[Auto TP] No TP found for ' + p.symbol + ' — placing now');
               autoSetTP(p.symbol, p.entryPrice, Math.abs(amt));
             });
@@ -1080,16 +1079,12 @@
     }
 
     // Track symbols that require Algo endpoint (blocked by CORS from browser)
-    var algoOnlySymbols = new Set(JSON.parse(localStorage.getItem('algoOnlySymbols') || '[]'));
+    var algoOnlySymbols = new Set(); // cleared — now using 30s cooldown instead
 
     async function autoSetTP(symbol, avgPrice, execQty) {
       if (tpInFlight.has(symbol)) { console.log('[autoSetTP] already in-flight for', symbol); return; }
-      // Skip symbols known to require Algo endpoint (CORS blocked from browser)
-      if (algoOnlySymbols.has(symbol)) {
-        setShortStatus(symbol, 'FILLED', 'Filled ⚠ TP manual (algo-only)');
-        return;
-      }
       tpInFlight.add(symbol);
+      tpLastAttempt[symbol] = Date.now();
       try {
       var ei       = exInfoCache.futures && exInfoCache.futures[symbol];
       var tickSize = (ei && ei.tick && ei.tick !== '--') ? parseFloat(ei.tick) : 0.01;
@@ -1106,22 +1101,19 @@
           quantity: qtyFmt, workingType: 'MARK_PRICE'
         });
         console.log('[autoSetTP] response:', JSON.stringify(r));
-        if (r.code === -4120) {
-          // Symbol requires Binance Algo API — CORS blocked from browser, mark for manual TP
-          console.warn('[autoSetTP] symbol', symbol, 'requires algo endpoint (CORS blocked) — marking manual');
-          algoOnlySymbols.add(symbol);
-          localStorage.setItem('algoOnlySymbols', JSON.stringify([...algoOnlySymbols]));
-          setShortStatus(symbol, 'FILLED', 'Filled ⚠ TP manual (algo-only)');
-          return;
-        }
         if (r.orderId) {
           tpMap[symbol] = { price: tpPrice };
           setShortStatus(symbol, 'FILLED', 'Filled + TP @$' + tpPrice);
           renderPositions();
         } else {
-          setShortStatus(symbol, 'FILLED', 'Filled (TP err ' + (r.code||'?') + ': ' + (r.msg||'?') + ')');
+          // Any error (including -4120) will retry after 30s cooldown
+          console.warn('[autoSetTP]', symbol, 'err', r.code, r.msg, '— will retry in 30s');
+          setShortStatus(symbol, 'FILLED', 'Filled (TP err ' + (r.code||'?') + ' — retry 30s)');
         }
-      } catch(e) { setShortStatus(symbol, 'FILLED', 'Filled (TP ex: ' + (e.message||'?') + ')'); }
+      } catch(e) {
+        console.warn('[autoSetTP]', symbol, 'fetch err:', e.message, '— will retry in 30s');
+        setShortStatus(symbol, 'FILLED', 'Filled (TP failed — retry 30s)');
+      }
       } finally { tpInFlight.delete(symbol); }
     }
 
