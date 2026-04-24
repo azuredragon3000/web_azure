@@ -707,8 +707,13 @@
         loadPositionOpenTimes(open);
 
         // fetch open orders: check TP status + recover any pending short orders after page reload
-        binanceAuth('https://fapi.binance.com', '/fapi/v1/openOrders')
-          .then(function(orders){
+        // also fetch algo open orders (TAKE_PROFIT_MARKET on some symbols goes through algo endpoint)
+        Promise.all([
+          binanceAuth('https://fapi.binance.com', '/fapi/v1/openOrders'),
+          binanceAuth('https://fapi.binance.com', '/fapi/v1/order/algo/openOrders', { algoType: 'TPSL' }).catch(function(){ return []; })
+        ]).then(function(results){
+            var orders     = results[0];
+            var algoOrders = results[1];
             tpMap = {};
             if (Array.isArray(orders)) {
               orders.forEach(function(o){
@@ -731,6 +736,13 @@
                 }
               });
             }
+            // Algo TP/SL orders — algoOrders may be { orders: [...] } or array
+            var algoList = Array.isArray(algoOrders) ? algoOrders : (algoOrders && Array.isArray(algoOrders.orders) ? algoOrders.orders : []);
+            algoList.forEach(function(o){
+              if (o.takeProfitPrice && parseFloat(o.takeProfitPrice) > 0) {
+                if (!tpMap[o.symbol]) tpMap[o.symbol] = { price: o.takeProfitPrice };
+              }
+            });
             renderPositions();
             // Auto-set TP for any SHORT position that has no TP order yet
             open.forEach(function(p) {
@@ -1075,13 +1087,23 @@
       var qtyFmt   = parseFloat(execQty).toFixed(countDecimals(stepSize));
       console.log('[autoSetTP]', symbol, 'entry:', avgPrice, 'qty:', qtyFmt, '→ stopPrice:', tpPrice);
       try {
+        // Try regular endpoint first
         var r = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/order', {
           symbol: symbol, side: 'BUY', positionSide: 'SHORT',
           type: 'TAKE_PROFIT_MARKET', stopPrice: tpPrice,
           quantity: qtyFmt, workingType: 'MARK_PRICE'
         });
-        console.log('[autoSetTP] response:', JSON.stringify(r));
-        if (r.orderId) {
+        console.log('[autoSetTP] /fapi/v1/order response:', JSON.stringify(r));
+        // -4120: symbol requires Algo Order endpoint
+        if (r.code === -4120) {
+          console.log('[autoSetTP] falling back to algo endpoint for', symbol);
+          r = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/order/algo/tpsl', {
+            symbol: symbol, side: 'BUY', positionSide: 'SHORT',
+            quantity: qtyFmt, takeProfitPrice: tpPrice, workingType: 'MARK_PRICE'
+          });
+          console.log('[autoSetTP] /fapi/v1/order/algo/tpsl response:', JSON.stringify(r));
+        }
+        if (r.orderId || r.algoId) {
           tpMap[symbol] = { price: tpPrice };
           setShortStatus(symbol, 'FILLED', 'Filled + TP @$' + tpPrice);
           renderPositions();
