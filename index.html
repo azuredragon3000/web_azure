@@ -482,7 +482,7 @@
         document.getElementById('balance-section').style.display = '';
 
         // Refresh every 10s
-        setTimeout(loadBalance, 10000);
+        setTimeout(loadBalance, 30000);
       } catch(e) {
         console.warn('Balance error:', e);
       }
@@ -718,15 +718,13 @@
         if (!open.length) return;
 
         openPositions = open;
-        // fetch 24h change for open symbols
+        // fetch 24h change for open symbols only (targeted fetch — much lower weight than full ticker)
         var syms = open.map(function(p){ return p.symbol; });
-        fetch('https://fapi.binance.com/fapi/v1/ticker/24hr')
+        var tickerParams = encodeURIComponent(JSON.stringify(syms));
+        fetch('https://fapi.binance.com/fapi/v1/ticker/24hr?symbols=' + tickerParams)
           .then(function(r){ return r.json(); })
           .then(function(tickers){
-            tickers.forEach(function(t){
-              if (syms.indexOf(t.symbol) !== -1)
-                pos24hMap[t.symbol] = t.priceChangePercent;
-            });
+            tickers.forEach(function(t){ pos24hMap[t.symbol] = t.priceChangePercent; });
             renderPositions();
           })
           .catch(function(){ renderPositions(); });
@@ -780,8 +778,8 @@
         document.getElementById('pos-wrap').style.display  = '';
         document.getElementById('pos-label').style.display = '';
 
-        // Refresh positions every 5s
-        setTimeout(loadPositions, 5000);
+        // Refresh positions every 10s
+        setTimeout(loadPositions, 10000);
       } catch(e) {
         var errMsg = e && e.message ? e.message : JSON.stringify(e);
         var errEl = document.getElementById('pos-error');
