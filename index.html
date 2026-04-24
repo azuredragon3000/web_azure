@@ -822,7 +822,6 @@
       { id:'taker',     label:'Taker Fee',     visible:true },
       { id:'maker',     label:'Maker Fee',     visible:true },
       { id:'futurePos', label:'Future Pos',    visible:true },
-      { id:'warning',   label:'Warning',        visible:true },
       { id:'short',     label:'Short',         visible:true, always:true },
       { id:'status',    label:'Status',        visible:true }
     ];
@@ -1510,7 +1509,7 @@
             else if (c.id==='short') hdr += '<th style="text-align:center;">Short</th>';
             else if (c.id==='status') hdr += '<th style="text-align:center;">Status</th>';
             else if (c.id==='futurePos') hdr += '<th>Future Pos</th>';
-            else if (c.id==='warning') hdr += '<th style="text-align:center;">Warning</th>';
+
             else hdr += '<th>'+c.label+'</th>';
           });
           document.querySelector('#ranking-table thead tr').innerHTML = hdr;
@@ -1537,11 +1536,7 @@
               taker:     '<td class="fee">'+ei.taker+'</td>',
               maker:     '<td class="fee">'+ei.maker+'</td>',
               futurePos: '<td style="text-align:center;font-weight:700;color:'+(hasPos?'#4ade80':'#444')+';">'+(hasPos?'YES':'')+'</td>',
-              warning:   (function(){
-                           if (market !== 'futures') return '<td></td>';
-                           if (!ei.warn) return '<td style="text-align:center;color:#444;">-</td>';
-                           return '<td style="text-align:center;"><span style="color:#f0b90b;font-weight:700;font-size:0.75rem;" title="Binance warning: high volatility / early-stage project">&#9888; Yes</span></td>';
-                         })(),
+
               short:     '<td style="text-align:center;"><button onclick="placeShort(\''+t.symbol+'\','+parseFloat(t.lastPrice)+')" '+(canShort?'':'disabled ')+'style="padding:0.15rem 0.55rem;border-radius:4px;border:1px solid #f87171;background:transparent;color:#f87171;font-size:0.72rem;cursor:pointer;'+(canShort?'':'opacity:0.35;cursor:not-allowed;')+'">Short</button></td>',
               status:    '<td style="text-align:center;font-size:0.75rem;min-width:90px;" id="ss-'+t.symbol+'"><span style="color:'+ssColor+';">'+ssText+'</span></td>'
             };
