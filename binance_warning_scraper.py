@@ -1,15 +1,17 @@
 """
 Binance Futures Warning Scraper
 ================================
-Fetches all USDT-M perpetual futures, identifies coins with either of:
-  - Warning A (early-stage): coin is in Binance "Innovation Zone"
-    ("The underlying asset is an early-stage crypto project, extreme price fluctuation...")
-  - Warning B (high volatility): triggerProtect >= 0.15 in futures exchange info
-    ("The symbol is subject to high volatility, please do your own research")
+Fetches all USDT-M perpetual futures and identifies coins that Binance marks
+with a risk warning in the app:
+  "The underlying asset is an early-stage crypto project..."
+  or "The symbol is subject to high volatility..."
 
-Then compares against top 20 gainers & losers and annotates the table.
+Detection method: Binance bapi `se` field
+  se=9   → Innovation Zone = warning shown in app
+  se=521 → Main market     = no warning
+  (other values / not found in spot bapi → treated as no warning)
 
-Usage:
+usage:
     pip install requests
     python binance_warning_scraper.py
 """
@@ -44,8 +46,8 @@ def futures_symbol_to_spot(futures_sym: str, base_asset: str) -> str:
     return futures_sym  # fallback
 
 
-def get_bapi_tags(spot_symbol: str) -> list[str]:
-    """Return tags list from Binance bapi for a spot symbol, or [] on failure."""
+def get_bapi_info(spot_symbol: str) -> dict:
+    """Return {'se': str, 'tags': list} from Binance bapi, or defaults on failure."""
     try:
         url = ('https://www.binance.com/bapi/asset/v2/public'
                '/asset-service/product/get-product-by-symbol?symbol=' + spot_symbol)
@@ -53,10 +55,10 @@ def get_bapi_tags(spot_symbol: str) -> list[str]:
         if r.status_code == 200:
             data = r.json().get('data')
             if data:
-                return data.get('tags', [])
+                return {'se': str(data.get('se', '')), 'tags': data.get('tags', [])}
     except Exception:
         pass
-    return []
+    return {'se': '', 'tags': []}
 
 
 # ── Step 1: fetch all USDT perpetual futures ─────────────────────────────────
@@ -85,35 +87,33 @@ def build_warning_set(perps: list[dict]) -> dict[str, dict]:
     pairs = []
     for s in perps:
         spot = futures_symbol_to_spot(s['symbol'], s.get('baseAsset', s['symbol'][:-4]))
-        tp   = float(s.get('triggerProtect') or 0)
-        pairs.append((s['symbol'], spot, tp))
+        pairs.append((s['symbol'], spot))
 
-    print(f'Fetching bapi product tags for {len(pairs)} symbols (concurrent)...', flush=True)
+    print(f'Fetching bapi data for {len(pairs)} symbols (concurrent)...', flush=True)
 
     results = {}
     with ThreadPoolExecutor(max_workers=20) as pool:
         future_map = {
-            pool.submit(get_bapi_tags, spot): (fut_sym, spot, tp)
-            for fut_sym, spot, tp in pairs
+            pool.submit(get_bapi_info, spot): (fut_sym, spot)
+            for fut_sym, spot in pairs
         }
         done = 0
         for future in as_completed(future_map):
-            fut_sym, spot, tp = future_map[future]
-            tags = future.result()
-            warn_early    = 'innovation-zone' in tags
-            warn_volatile = tp >= 0.15
+            fut_sym, spot = future_map[future]
+            info = future.result()
+            # se=9 = Innovation Zone = has warning in Binance app
+            has_warn = info['se'] == '9'
             results[fut_sym] = {
-                'warn_early':    warn_early,
-                'warn_volatile': warn_volatile,
-                'tags':          tags,
-                'triggerProtect': tp,
-                'spot_symbol':   spot,
+                'warn':      has_warn,
+                'se':        info['se'],
+                'tags':      info['tags'],
+                'spot_symbol': spot,
             }
             done += 1
             if done % 50 == 0:
                 print(f'  ...{done}/{len(pairs)}', flush=True)
 
-    print(f'Done. Tagged {sum(1 for v in results.values() if v["warn_early"] or v["warn_volatile"])} symbols with at least one warning.')
+    print(f'Done. {sum(1 for v in results.values() if v["warn"])} symbols with Binance warning.')
     return results
 
 
@@ -150,8 +150,7 @@ COL = {
     'price':   14,
     'chg':     9,
     'volume':  11,
-    'warn_a':  9,   # early-stage
-    'warn_b':  12,  # high volatility
+    'warn':    8,
 }
 
 def row_str(rank: int, t: dict, info: dict) -> str:
@@ -159,16 +158,14 @@ def row_str(rank: int, t: dict, info: dict) -> str:
     price  = fmt_price(float(t['lastPrice']))
     pct    = fmt_pct(float(t['priceChangePercent']))
     vol    = f"${float(t['quoteVolume'])/1e6:.1f}M"
-    wa     = 'YES ⚠' if info.get('warn_early')    else '-'
-    wb     = 'YES ⚠' if info.get('warn_volatile') else '-'
+    w      = '⚠ Yes' if info.get('warn') else '-'
     return (
         str(rank).rjust(COL['rank']) + '  ' +
         sym.ljust(COL['symbol']) +
         price.ljust(COL['price']) +
         pct.ljust(COL['chg']) +
         vol.ljust(COL['volume']) +
-        wa.ljust(COL['warn_a']) +
-        wb.ljust(COL['warn_b'])
+        w.ljust(COL['warn'])
     )
 
 HEADER = (
@@ -177,16 +174,14 @@ HEADER = (
     'Price'.ljust(COL['price']) +
     '24h %'.ljust(COL['chg']) +
     'Volume'.ljust(COL['volume']) +
-    'Early-Stg'.ljust(COL['warn_a']) +
-    'High-Volt'.ljust(COL['warn_b'])
+    'Warning'.ljust(COL['warn'])
 )
 
 def print_table(title: str, tickers: list[dict], warnings: dict):
-    print(f'\n{"="*70}')
+    print(f'\n{"="*65}')
     print(f'  {title}')
-    print(f'  Warning A (early-stage) = Innovation Zone tag on Binance')
-    print(f'  Warning B (high-volt)   = triggerProtect >= 15%')
-    print(f'{"="*70}')
+    print(f'  Warning = Binance Innovation Zone (se=9 in bapi)')
+    print(f'{"="*65}')
     print(HEADER)
     print('-' * len(HEADER))
     for i, t in enumerate(tickers, 1):
@@ -199,19 +194,16 @@ def print_table(title: str, tickers: list[dict], warnings: dict):
 def print_warning_summary(warnings: dict):
     warn_coins = {
         sym: info for sym, info in warnings.items()
-        if info['warn_early'] or info['warn_volatile']
+        if info['warn']
     }
     print(f'\n{"="*70}')
-    print(f'  ALL FUTURES USDT COINS WITH EITHER WARNING  ({len(warn_coins)} total)')
+    print(f'  ALL FUTURES USDT COINS WITH BINANCE WARNING  ({len(warn_coins)} total)')
     print(f'{"="*70}')
-    print(f'{"Symbol":<18} {"Early-Stg":<12} {"High-Volt":<12} {"triggerProtect":<16} {"Tags"}')
+    print(f'{"Symbol":<18} {"se":<6} {"Tags"}')
     print('-' * 70)
     for sym, info in sorted(warn_coins.items()):
-        wa = 'YES' if info['warn_early']    else '-'
-        wb = 'YES' if info['warn_volatile'] else '-'
-        tp = f"{info['triggerProtect']:.4f}" if info['triggerProtect'] else '-'
         tags = ', '.join(info['tags']) if info['tags'] else '-'
-        print(f'{sym:<18} {wa:<12} {wb:<12} {tp:<16} {tags}')
+        print(f'{sym:<18} {info["se"]:<6} {tags}')
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────

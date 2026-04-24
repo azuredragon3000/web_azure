@@ -1016,8 +1016,9 @@
         fetch('https://www.binance.com/bapi/asset/v2/public/asset-service/product/get-product-by-symbol?symbol=' + spotSym)
           .then(function(r){ return r.json(); })
           .then(function(json){
-            var tags = (json.data && json.data.tags) || [];
-            var hasWarn = tags.indexOf('innovation-zone') !== -1;
+            var data = json.data || {};
+            // se=9 = Innovation Zone = Binance shows warning in app
+            var hasWarn = String(data.se || '') === '9';
             warnTagsCache[spotSym] = hasWarn;
             updateWarnCell(futSym, hasWarn);
           })
@@ -1028,11 +1029,8 @@
     function updateWarnCell(futSym, hasBapiWarn) {
       var el = document.getElementById('warn-' + futSym);
       if (!el) return;
-      // Also check fapi triggerProtect >= 0.15 from exInfoCache
-      var ei = exInfoCache.futures && exInfoCache.futures[futSym];
-      var hasWarn = hasBapiWarn || (ei && ei.warn);
-      if (hasWarn) {
-        el.innerHTML = '<span style="color:#f0b90b;font-weight:700;font-size:0.75rem;" title="Binance warning: innovation zone / high volatility">&#9888; Yes</span>';
+      if (hasBapiWarn) {
+        el.innerHTML = '<span style="color:#f0b90b;font-weight:700;font-size:0.75rem;" title="Binance Innovation Zone — early stage / high volatility">&#9888; Yes</span>';
       } else {
         el.innerHTML = '<span style="color:#444;">-</span>';
       }
