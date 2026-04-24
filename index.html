@@ -754,8 +754,6 @@
               var ss = shortStatuses[p.symbol];
               if (ss && (ss.state === 'PENDING' || ss.state === 'WORKING')) return; // order or TP in flight
               if (tpInFlight.has(p.symbol)) return; // autoSetTP currently running
-              // Throttle: wait 30s between attempts
-              if (tpLastAttempt[p.symbol] && (Date.now() - tpLastAttempt[p.symbol]) < 30000) return;
               console.log('[Auto TP] No TP found for ' + p.symbol + ' — placing now');
               autoSetTP(p.symbol, p.entryPrice, Math.abs(amt));
             });
@@ -1695,6 +1693,14 @@
     if (!_unlocked) {
       document.getElementById('main-content').style.display = 'none';
       document.getElementById('lock-screen').style.display = 'flex';
+      // Still fetch passKey from Sheet even when locked so password syncs across devices
+      var _sheetUrl = localStorage.getItem('sheetUrl');
+      if (_sheetUrl) {
+        fetch(_sheetUrl + '?_=' + Date.now())
+          .then(function(r){ return r.json(); })
+          .then(function(json){ if (json.passKey) localStorage.setItem('_pk', json.passKey); })
+          .catch(function(){});
+      }
     } else {
       document.getElementById('subtabs').classList.add('show');
       document.getElementById('table-title').innerText = '🚀 Top Gainers';
