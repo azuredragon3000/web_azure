@@ -575,8 +575,8 @@
           tpsl:     '<td style="text-align:center;font-weight:700;">' + (function(){
                       var tp = tpMap[p.symbol];
                       if (!tp) return '<span style="color:#555;">-</span>';
-                      var label = tp.type === 'L' ? '<span style="color:#f0b90b;">LIMIT</span>' : '<span style="color:#4ade80;">YES</span>';
-                      return label + (tp.price ? '<br><span style="font-size:0.68rem;color:#888;">@$'+parseFloat(tp.price).toPrecision(4)+'</span>' : '');
+                      return '<span style="color:#4ade80;">YES</span>'
+                        + (tp.price ? '<br><span style="font-size:0.68rem;color:#888;">@$'+parseFloat(tp.price).toPrecision(4)+'</span>' : '');
                     })() + '</td>',
           margin:   '<td style="color:#888;">' + margin + '</td>'
         };
@@ -690,17 +690,14 @@
             tpMap = {};
             if (Array.isArray(orders)) {
               orders.forEach(function(o){
-                // Official Position TP/SL types
                 if (o.type === 'TAKE_PROFIT' || o.type === 'TAKE_PROFIT_MARKET') {
-                  tpMap[o.symbol] = { price: o.stopPrice || o.price, type: 'TP' };
+                  tpMap[o.symbol] = { price: o.stopPrice || o.price };
                 }
-                // LIMIT BUY closing SHORT (fallback TP)
                 if (o.type === 'LIMIT' && o.side === 'BUY' && o.positionSide === 'SHORT') {
-                  if (!tpMap[o.symbol]) tpMap[o.symbol] = { price: o.price, type: 'L' };
+                  if (!tpMap[o.symbol]) tpMap[o.symbol] = { price: o.price };
                 }
-                // LIMIT SELL closing LONG (fallback TP)
                 if (o.type === 'LIMIT' && o.side === 'SELL' && o.positionSide === 'LONG') {
-                  if (!tpMap[o.symbol]) tpMap[o.symbol] = { price: o.price, type: 'L' };
+                  if (!tpMap[o.symbol]) tpMap[o.symbol] = { price: o.price };
                 }
               });
             }
@@ -1031,7 +1028,6 @@
       tpPrice = (Math.round(tpPrice / tickSize) * tickSize).toFixed(countDecimals(tickSize));
       var qtyFmt   = parseFloat(execQty).toFixed(countDecimals(stepSize));
       try {
-        // Attempt 1: TAKE_PROFIT_MARKET — hiển thị đúng "Position TP/SL" trong app Binance
         var r = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/order', {
           symbol: symbol, side: 'BUY', positionSide: 'SHORT',
           type: 'TAKE_PROFIT_MARKET', stopPrice: tpPrice,
@@ -1041,20 +1037,8 @@
           tpMap[symbol] = { price: tpPrice };
           setShortStatus(symbol, 'FILLED', 'Filled + TP @$' + tpPrice);
           renderPositions();
-          return;
-        }
-        // Attempt 2 fallback: LIMIT BUY — vẫn bảo vệ vị thế, hiện trong Open Orders
-        var r2 = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/order', {
-          symbol: symbol, side: 'BUY', positionSide: 'SHORT',
-          type: 'LIMIT', timeInForce: 'GTC',
-          price: tpPrice, quantity: qtyFmt
-        });
-        if (r2.orderId) {
-          tpMap[symbol] = { price: tpPrice };
-          setShortStatus(symbol, 'FILLED', 'Filled + TP(L) @$' + tpPrice);
-          renderPositions();
         } else {
-          setShortStatus(symbol, 'FILLED', 'Filled (TP err: ' + (r2.msg || r2.code || r.msg || r.code || '?') + ')');
+          setShortStatus(symbol, 'FILLED', 'Filled (TP err: ' + (r.msg || r.code || '?') + ')');
         }
       } catch(e) { setShortStatus(symbol, 'FILLED', 'Filled (TP ex: ' + (e.message||'?') + ')'); }
     }
