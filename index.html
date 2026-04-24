@@ -592,7 +592,11 @@
                     })(),
           tpsl:     '<td style="text-align:center;font-weight:700;">' + (function(){
                       var tp = tpMap[p.symbol];
-                      if (!tp) return '<span style="color:#555;">-</span>';
+                      if (!tp) {
+                        if (algoOnlySymbols.has(p.symbol))
+                          return '<span style="color:#f0b90b;font-size:0.72rem;" title="Binance requires Algo API for this symbol — set TP manually in Binance app">⚠ Manual</span>';
+                        return '<span style="color:#555;">-</span>';
+                      }
                       return '<span style="color:#4ade80;">YES</span>'
                         + (tp.price ? '<br><span style="font-size:0.68rem;color:#888;">@$'+parseFloat(tp.price).toPrecision(4)+'</span>' : '');
                     })() + '</td>',
@@ -1075,8 +1079,16 @@
       el.innerHTML   = msg;
     }
 
+    // Track symbols that require Algo endpoint (blocked by CORS from browser)
+    var algoOnlySymbols = new Set(JSON.parse(localStorage.getItem('algoOnlySymbols') || '[]'));
+
     async function autoSetTP(symbol, avgPrice, execQty) {
       if (tpInFlight.has(symbol)) { console.log('[autoSetTP] already in-flight for', symbol); return; }
+      // Skip symbols known to require Algo endpoint (CORS blocked from browser)
+      if (algoOnlySymbols.has(symbol)) {
+        setShortStatus(symbol, 'FILLED', 'Filled ⚠ TP manual (algo-only)');
+        return;
+      }
       tpInFlight.add(symbol);
       try {
       var ei       = exInfoCache.futures && exInfoCache.futures[symbol];
@@ -1088,23 +1100,21 @@
       var qtyFmt   = parseFloat(execQty).toFixed(countDecimals(stepSize));
       console.log('[autoSetTP]', symbol, 'entry:', avgPrice, 'qty:', qtyFmt, '→ stopPrice:', tpPrice);
       try {
-        // Try regular endpoint first
         var r = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/order', {
           symbol: symbol, side: 'BUY', positionSide: 'SHORT',
           type: 'TAKE_PROFIT_MARKET', stopPrice: tpPrice,
           quantity: qtyFmt, workingType: 'MARK_PRICE'
         });
-        console.log('[autoSetTP] /fapi/v1/order response:', JSON.stringify(r));
-        // -4120: symbol requires Algo Order endpoint
+        console.log('[autoSetTP] response:', JSON.stringify(r));
         if (r.code === -4120) {
-          console.log('[autoSetTP] falling back to algo endpoint for', symbol);
-          r = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/order/algo/tpsl', {
-            symbol: symbol, side: 'BUY', positionSide: 'SHORT',
-            quantity: qtyFmt, takeProfitPrice: tpPrice, workingType: 'MARK_PRICE'
-          });
-          console.log('[autoSetTP] /fapi/v1/order/algo/tpsl response:', JSON.stringify(r));
+          // Symbol requires Binance Algo API — CORS blocked from browser, mark for manual TP
+          console.warn('[autoSetTP] symbol', symbol, 'requires algo endpoint (CORS blocked) — marking manual');
+          algoOnlySymbols.add(symbol);
+          localStorage.setItem('algoOnlySymbols', JSON.stringify([...algoOnlySymbols]));
+          setShortStatus(symbol, 'FILLED', 'Filled ⚠ TP manual (algo-only)');
+          return;
         }
-        if (r.orderId || r.algoId) {
+        if (r.orderId) {
           tpMap[symbol] = { price: tpPrice };
           setShortStatus(symbol, 'FILLED', 'Filled + TP @$' + tpPrice);
           renderPositions();
