@@ -820,6 +820,7 @@
       { id:'taker',     label:'Taker Fee',     visible:true },
       { id:'maker',     label:'Maker Fee',     visible:true },
       { id:'futurePos', label:'Future Pos',    visible:true },
+      { id:'warning',   label:'Warning',        visible:true },
       { id:'short',     label:'Short',         visible:true, always:true },
       { id:'status',    label:'Status',        visible:true }
     ];
@@ -982,6 +983,49 @@
 
     // Cache exchangeInfo per market so we only fetch once
     var exInfoCache = { futures: null, spot: null };
+
+    // Warning tags cache: spotSymbol -> true (has innovation-zone or high-volatility warning)
+    var warnTagsCache = {};
+
+    function futuresSymToSpot(sym) {
+      // '1000PEPEUSDT' -> 'PEPEUSDT', 'BTCUSDT' -> 'BTCUSDT'
+      var base = sym.replace(/USDT$/, '').replace(/^\d+/, '');
+      return base + 'USDT';
+    }
+
+    function fetchWarningTags(symbols) {
+      // Fetch bapi tags for each symbol concurrently, update warnTagsCache, update DOM cells
+      symbols.forEach(function(futSym) {
+        var spotSym = futuresSymToSpot(futSym);
+        if (spotSym in warnTagsCache) {
+          // already cached — just refresh cell
+          updateWarnCell(futSym, warnTagsCache[spotSym]);
+          return;
+        }
+        fetch('https://www.binance.com/bapi/asset/v2/public/asset-service/product/get-product-by-symbol?symbol=' + spotSym)
+          .then(function(r){ return r.json(); })
+          .then(function(json){
+            var tags = (json.data && json.data.tags) || [];
+            var hasWarn = tags.indexOf('innovation-zone') !== -1;
+            warnTagsCache[spotSym] = hasWarn;
+            updateWarnCell(futSym, hasWarn);
+          })
+          .catch(function(){ warnTagsCache[spotSym] = false; });
+      });
+    }
+
+    function updateWarnCell(futSym, hasBapiWarn) {
+      var el = document.getElementById('warn-' + futSym);
+      if (!el) return;
+      // Also check fapi triggerProtect >= 0.15 from exInfoCache
+      var ei = exInfoCache.futures && exInfoCache.futures[futSym];
+      var hasWarn = hasBapiWarn || (ei && ei.warn);
+      if (hasWarn) {
+        el.innerHTML = '<span style="color:#f0b90b;font-weight:700;font-size:0.75rem;" title="Binance warning: innovation zone / high volatility">&#9888; Yes</span>';
+      } else {
+        el.innerHTML = '<span style="color:#444;">-</span>';
+      }
+    }
 
     function getExchangeInfo(market) {
       if (exInfoCache[market]) return Promise.resolve(exInfoCache[market]);
@@ -1504,6 +1548,7 @@
           var hdr = '<th>#&nbsp;Coin</th>';
           visG.forEach(function(c){
             if (c.id==='funding') hdr += '<th style="text-align:right;">Funding</th>';
+            else if (c.id==='warning') hdr += '<th style="text-align:center;">Warning</th>';
             else if (c.id==='short') hdr += '<th style="text-align:center;">Short</th>';
             else if (c.id==='status') hdr += '<th style="text-align:center;">Status</th>';
             else if (c.id==='futurePos') hdr += '<th>Future Pos</th>';
@@ -1534,6 +1579,7 @@
               taker:     '<td class="fee">'+ei.taker+'</td>',
               maker:     '<td class="fee">'+ei.maker+'</td>',
               futurePos: '<td style="text-align:center;font-weight:700;color:'+(hasPos?'#4ade80':'#444')+';">'+(hasPos?'YES':'')+'</td>',
+              warning:   '<td id="warn-'+t.symbol+'" style="text-align:center;"><span style="color:#555;">…</span></td>',
 
               short:     '<td style="text-align:center;"><button onclick="placeShort(\''+t.symbol+'\','+parseFloat(t.lastPrice)+')" '+(canShort?'':'disabled ')+'style="padding:0.15rem 0.55rem;border-radius:4px;border:1px solid #f87171;background:transparent;color:#f87171;font-size:0.72rem;cursor:pointer;'+(canShort?'':'opacity:0.35;cursor:not-allowed;')+'">Short</button></td>',
               status:    '<td style="text-align:center;font-size:0.75rem;min-width:90px;" id="ss-'+t.symbol+'"><span style="color:'+ssColor+';">'+ssText+'</span></td>'
@@ -1554,6 +1600,7 @@
             if (s && s.state) setShortStatus(sym, s.state, s.msg);
           });
           if (market === 'futures') loadFundingData();
+          if (market === 'futures') fetchWarningTags(top20.map(function(t){ return t.symbol; }));
           document.getElementById('update-time').innerText = (market==='futures'?'Futures':'Spot') + ' · ' + new Date().toLocaleTimeString();
           document.getElementById('update-time').style.color = '#555';
         })
