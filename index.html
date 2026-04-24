@@ -169,6 +169,18 @@
     </nav>
   </header>
 
+  <!-- ── Lock Screen ── -->
+  <div id="lock-screen" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:4rem 1.5rem;gap:1.2rem;">
+    <div style="font-size:3rem;">&#128274;</div>
+    <div style="color:#aaa;font-size:0.9rem;">Enter password to unlock</div>
+    <div style="display:flex;flex-direction:column;gap:0.6rem;width:100%;max-width:360px;">
+      <input type="text" id="lock-sheet-url" placeholder="Google Sheet URL (first time only)" style="background:#0d1117;border:1px solid #2a2a4a;border-radius:6px;padding:0.55rem 0.8rem;color:#f0f0f0;font-size:0.8rem;width:100%;" />
+      <input type="password" id="lock-password" placeholder="Password" style="background:#0d1117;border:1px solid #2a2a4a;border-radius:6px;padding:0.55rem 0.8rem;color:#f0f0f0;font-size:0.95rem;width:100%;" onkeydown="if(event.key==='Enter')unlockPage()" />
+      <button onclick="unlockPage()" style="padding:0.6rem;border-radius:6px;border:none;background:#e94560;color:#fff;font-size:0.9rem;font-weight:600;cursor:pointer;">Unlock</button>
+      <div id="lock-status" style="font-size:0.78rem;color:#f0b90b;text-align:center;min-height:1.2em;"></div>
+    </div>
+  </div>
+
   <main id="main-content">
     <!-- ── Balance Cards ── -->
     <div class="balance-section" id="balance-section" style="display:none">
@@ -1681,17 +1693,57 @@
     function lockPage() {
       _unlocked = false;
       localStorage.removeItem('unlocked');
+      var lsEl = document.getElementById('lock-sheet-url');
+      if (lsEl) lsEl.value = localStorage.getItem('sheetUrl') || '';
+      document.getElementById('lock-password').value = '';
+      document.getElementById('lock-status').innerText = '';
       document.getElementById('main-content').style.display = 'none';
       document.getElementById('lock-screen').style.display = 'flex';
       closeConfig();
+    }
+    async function unlockPage() {
+      var statusEl = document.getElementById('lock-status');
+      var passInput = document.getElementById('lock-password').value;
+      var sheetInput = (document.getElementById('lock-sheet-url').value || '').trim();
+      if (!passInput) { statusEl.innerText = 'Enter password'; return; }
+      // Save sheet URL if provided
+      if (sheetInput) {
+        sheetUrl = sheetInput;
+        localStorage.setItem('sheetUrl', sheetUrl);
+      }
+      // If we have a sheet URL, try fetching passKey first
+      if (sheetUrl && !localStorage.getItem('_pk')) {
+        statusEl.innerText = 'Fetching from Sheet...';
+        try {
+          var r = await fetch(sheetUrl + '?_=' + Date.now());
+          var json = await r.json();
+          if (json.passKey) localStorage.setItem('_pk', json.passKey);
+        } catch(e) {}
+      }
+      if (checkPass(passInput)) {
+        _unlocked = true;
+        localStorage.setItem('unlocked', '1');
+        document.getElementById('lock-screen').style.display = 'none';
+        document.getElementById('main-content').style.display = '';
+        document.getElementById('subtabs').classList.add('show');
+        document.getElementById('table-title').innerText = '\uD83D\uDE80 Top Gainers';
+        loadRanking(); initSnapshot();
+        loadPositions(); loadBalance(); loadFundingData(); loadConfigFromSheet();
+      } else {
+        statusEl.innerText = '\u274C Wrong password';
+        statusEl.style.color = '#f87171';
+      }
     }
 
     if (!_unlocked) {
       document.getElementById('main-content').style.display = 'none';
       document.getElementById('lock-screen').style.display = 'flex';
-      // Still fetch passKey from Sheet even when locked so password syncs across devices
+      // Pre-fill sheet URL input if known
       var _sheetUrl = localStorage.getItem('sheetUrl');
       if (_sheetUrl) {
+        var _lsEl = document.getElementById('lock-sheet-url');
+        if (_lsEl) _lsEl.value = _sheetUrl;
+        // Fetch passKey from Sheet so password syncs across devices
         fetch(_sheetUrl + '?_=' + Date.now())
           .then(function(r){ return r.json(); })
           .then(function(json){ if (json.passKey) localStorage.setItem('_pk', json.passKey); })
