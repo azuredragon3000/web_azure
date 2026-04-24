@@ -158,7 +158,7 @@ def row_str(rank: int, t: dict, info: dict) -> str:
     price  = fmt_price(float(t['lastPrice']))
     pct    = fmt_pct(float(t['priceChangePercent']))
     vol    = f"${float(t['quoteVolume'])/1e6:.1f}M"
-    w      = '⚠ Yes' if info.get('warn') else '-'
+    w      = '⚠ Yes  <<<' if info.get('warn') else '-'
     return (
         str(rank).rjust(COL['rank']) + '  ' +
         sym.ljust(COL['symbol']) +
