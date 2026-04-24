@@ -44,6 +44,9 @@
     .scroll-top-inner { height:1px; }
     thead th { text-align: left; padding: 0.7rem 0.9rem; font-size: 0.7rem; letter-spacing: 1.2px; text-transform: uppercase; color: #555; border-bottom: 1px solid #2a2a4a; white-space: nowrap; }
     thead th:not(:first-child) { text-align: right; }
+    thead th:first-child { position: sticky; left: 0; z-index: 3; background: #0d0d1a; }
+    tbody td:first-child { position: sticky; left: 0; z-index: 2; background: #0d0d1a; }
+    tbody tr:hover td:first-child { background: #1a1a2e; }
     tbody tr { border-bottom: 1px solid #1a1a2e; transition: background 0.15s; }
     tbody tr:hover { background: #1a1a2e; }
     tbody td { padding: 0.75rem 0.9rem; font-size: 0.88rem; white-space: nowrap; }
@@ -83,11 +86,12 @@
     .pos-wrap::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 4px; }
     .pos-table { width: 100%; border-collapse: collapse; min-width: 900px; }
     .pos-table thead th { text-align: right; padding: 0.6rem 0.9rem; font-size: 0.68rem; letter-spacing: 1.2px; text-transform: uppercase; color: #555; border-bottom: 1px solid #1e3a1e; white-space: nowrap; background: #0a1a0a; }
-    .pos-table thead th:first-child { text-align: left; }
+    .pos-table thead th:first-child { text-align: left; position: sticky; left: 0; z-index: 3; }
     .pos-table tbody tr { border-bottom: 1px solid #0d200d; transition: background 0.15s; }
     .pos-table tbody tr:hover { background: #0d1f0d; }
     .pos-table tbody td { padding: 0.7rem 0.9rem; font-size: 0.88rem; white-space: nowrap; text-align: right; font-family: monospace; }
-    .pos-table tbody td:first-child { text-align: left; font-family: 'Segoe UI', sans-serif; }
+    .pos-table tbody td:first-child { text-align: left; font-family: 'Segoe UI', sans-serif; position: sticky; left: 0; z-index: 2; background: #0a1a0a; }
+    .pos-table tbody tr:hover td:first-child { background: #0d1f0d; }
     .long-badge  { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 4px; background: #1a3a1a; color: #4ade80; font-size: 0.7rem; font-weight: 700; margin-left: 0.4rem; }
     .short-badge { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 4px; background: #3a1a1a; color: #f87171; font-size: 0.7rem; font-weight: 700; margin-left: 0.4rem; }
 
@@ -473,7 +477,8 @@
       chg24:    function(p){ return parseFloat(pos24hMap[p.symbol] || 0); },
       funding:  function(p){ return fundingMap[p.symbol] ? fundingMap[p.symbol].rate : 0; },
       opened:   function(p){ return posOpenTimeMap[p.symbol] || 0; },
-      duration: function(p){ return posOpenTimeMap[p.symbol] ? (Date.now() - posOpenTimeMap[p.symbol]) : 0; }
+      duration: function(p){ return posOpenTimeMap[p.symbol] ? (Date.now() - posOpenTimeMap[p.symbol]) : 0; },
+      sizeUsdt: function(p){ return Math.abs(parseFloat(p.positionAmt)) * parseFloat(p.markPrice); }
     };
 
     function sortPos(col) {
@@ -488,7 +493,7 @@
       // Build header dynamically
       var headerCells = '<th>Coin</th>';
       vis.forEach(function(c) {
-        var sortable = ['size','entry','mark','liq','pnl','roe','leverage','chg24','funding','opened','duration'].indexOf(c.id) !== -1;
+        var sortable = ['size','sizeUsdt','entry','mark','liq','pnl','roe','leverage','chg24','funding','opened','duration'].indexOf(c.id) !== -1;
         if (sortable) {
           headerCells += '<th onclick="sortPos(\''+c.id+'\')" style="cursor:pointer;user-select:none;">'+c.label+' <span class="sort-arrow" id="arr-'+c.id+'"></span></th>';
         } else if (c.id === 'close') {
@@ -502,7 +507,7 @@
       document.querySelector('.pos-table thead tr').innerHTML = headerCells;
 
       // update sort arrows
-      ['size','entry','mark','liq','pnl','roe','leverage','chg24','funding','opened','duration'].forEach(function(c){
+      ['size','sizeUsdt','entry','mark','liq','pnl','roe','leverage','chg24','funding','opened','duration'].forEach(function(c){
         var el = document.getElementById('arr-'+c);
         if (!el) return;
         el.innerText = c === posSortCol ? (posSortAsc ? '↑' : '↓') : '';
@@ -532,6 +537,7 @@
 
         var cellMap = {
           size:     '<td>' + Math.abs(amt).toFixed(4) + '</td>',
+          sizeUsdt: '<td>' + notional.toFixed(2) + ' $</td>',
           entry:    '<td>' + fmtPrice(entry) + '</td>',
           mark:     '<td>' + fmtPrice(mark) + '</td>',
           liq:      '<td class="' + (liq > 0 ? 'down' : 'flat') + '">' + (liq > 0 ? fmtPrice(liq) : '--') + '</td>',
@@ -783,6 +789,7 @@
     ];
     var POS_COLS_DEFAULT = [
       { id:'size',     label:'Size',           visible:true },
+      { id:'sizeUsdt', label:'Size (USDT)',     visible:true },
       { id:'entry',    label:'Entry Price',    visible:true },
       { id:'mark',     label:'Mark Price',     visible:true },
       { id:'liq',      label:'Liq Price',      visible:true },
