@@ -689,7 +689,7 @@
         // fetch open time for new symbols not yet cached
         loadPositionOpenTimes(open);
 
-        // fetch open orders to check TP status
+        // fetch open orders: check TP status + recover any pending short orders after page reload
         binanceAuth('https://fapi.binance.com', '/fapi/v1/openOrders')
           .then(function(orders){
             tpMap = {};
@@ -703,6 +703,15 @@
                 }
                 if (o.type === 'LIMIT' && o.side === 'SELL' && o.positionSide === 'LONG') {
                   if (!tpMap[o.symbol]) tpMap[o.symbol] = { price: o.price };
+                }
+                // Recover polling: pending LIMIT SELL SHORT = our short order not yet filled
+                if (o.type === 'LIMIT' && o.side === 'SELL' && o.positionSide === 'SHORT') {
+                  var ss = shortStatuses[o.symbol];
+                  // Only resume if not already polling this orderId
+                  if (!ss || ss.orderId !== o.orderId) {
+                    shortStatuses[o.symbol] = { state: 'PENDING', msg: 'Pending #' + o.orderId, orderId: o.orderId };
+                    pollOrder(o.symbol, o.orderId);
+                  }
                 }
               });
             }
