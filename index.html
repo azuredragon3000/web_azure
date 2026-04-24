@@ -630,19 +630,24 @@
 
     /* ── Refresh Future Pos column in ranking table without re-fetching ── */
     function refreshPosColumn() {
+      var visG = gainersColConfig.filter(function(c){ return c.visible; });
+      var posIdx = -1;
+      visG.forEach(function(c, i){ if (c.id === 'futurePos') posIdx = i; });
+      if (posIdx === -1) return; // column hidden
+      var cellIdx = posIdx + 1; // +1 for coin column
       var rows = document.querySelectorAll('#table-body tr');
       rows.forEach(function(row) {
         var symEl = row.querySelector('.coin-symbol');
         if (!symEl) return;
         var lbl   = symEl.innerText.trim();
         var cells = row.querySelectorAll('td');
-        var last  = cells[cells.length - 1];
-        if (!last) return;
+        if (cells.length <= cellIdx) return;
+        var cell = cells[cellIdx];
         var hasPos = openPositionSymbols.has(lbl);
-        last.style.textAlign  = 'center';
-        last.style.fontWeight = '700';
-        last.style.color      = hasPos ? '#4ade80' : '#444';
-        last.innerText        = hasPos ? 'YES' : '';
+        cell.style.textAlign  = 'center';
+        cell.style.fontWeight = '700';
+        cell.style.color      = hasPos ? '#4ade80' : '#444';
+        cell.innerText        = hasPos ? 'YES' : '';
       });
     }
 
@@ -1245,7 +1250,14 @@
         try {
           var r = await fetch(sheetUrl, {
             method: 'POST',
-            body: JSON.stringify({ shortMargin: defaultShortMargin, tpTarget: defaultTpTarget })
+            body: JSON.stringify({
+              shortMargin: defaultShortMargin,
+              tpTarget: defaultTpTarget,
+              colConfig: {
+                gainers: gainersColConfig.map(function(c){ return {id:c.id,visible:c.visible}; }),
+                pos:     posColConfig.map(function(c){     return {id:c.id,visible:c.visible}; })
+              }
+            })
           });
           var json = await r.json();
           if (json.ok) {
@@ -1278,9 +1290,25 @@
           var v2 = parseFloat(json.tpTarget) || 0.3;
           if (v2 !== defaultTpTarget) { defaultTpTarget = v2; localStorage.setItem('tpTarget', v2); changed = true; }
         }
+        if (json.colConfig) {
+          if (json.colConfig.gainers && Array.isArray(json.colConfig.gainers)) {
+            localStorage.setItem('gainersColConfig', JSON.stringify(json.colConfig.gainers));
+            gainersColConfig = loadColConfig('gainersColConfig', GAINERS_COLS_DEFAULT);
+            changed = true;
+          }
+          if (json.colConfig.pos && Array.isArray(json.colConfig.pos)) {
+            localStorage.setItem('posColConfig', JSON.stringify(json.colConfig.pos));
+            posColConfig = loadColConfig('posColConfig', POS_COLS_DEFAULT);
+            changed = true;
+          }
+        }
         var now = new Date().toLocaleTimeString();
         localStorage.setItem('sheetLastSync', now);
-        if (changed) console.log('[Sheet sync] Updated — margin=' + defaultShortMargin + ' tp=' + defaultTpTarget);
+        if (changed) {
+          console.log('[Sheet sync] Updated — margin=' + defaultShortMargin + ' tp=' + defaultTpTarget);
+          renderPositions();
+          if (currentTab === 'gainers' || currentTab === 'losers') loadRanking();
+        }
       } catch(e) {
         console.warn('[Sheet sync] Failed:', e);
       }
@@ -1419,6 +1447,11 @@
     }
 
     function renderFundingInRanking() {
+      var visG = gainersColConfig.filter(function(c){ return c.visible; });
+      var fundingIdx = -1;
+      visG.forEach(function(c, i){ if (c.id === 'funding') fundingIdx = i; });
+      if (fundingIdx === -1) return; // column hidden
+      var cellIdx = fundingIdx + 1; // +1 for coin column
       var rows = document.querySelectorAll('#table-body tr');
       rows.forEach(function(row) {
         var symEl = row.querySelector('.coin-symbol');
@@ -1426,9 +1459,8 @@
         var sym = symEl.innerText.trim() + 'USDT';
         var fd  = fundingMap[sym];
         var cells = row.querySelectorAll('td');
-        // funding is the 4th column (index 3)
-        if (cells.length < 4) return;
-        var cell = cells[3];
+        if (cells.length <= cellIdx) return;
+        var cell = cells[cellIdx];
         if (!fd) { cell.innerText = '-'; cell.style.color = '#555'; return; }
         var rColor = fd.rate > 0 ? '#4ade80' : fd.rate < 0 ? '#f87171' : '#888';
         cell.style.color = rColor;
