@@ -493,7 +493,7 @@
       // Build header dynamically
       var headerCells = '<th>Coin</th>';
       vis.forEach(function(c) {
-        var sortable = ['size','sizeUsdt','entry','mark','liq','pnl','roe','leverage','chg24','funding','opened','duration'].indexOf(c.id) !== -1;
+        var sortable = ['size','entry','mark','liq','pnl','roe','leverage','chg24','funding','opened','duration'].indexOf(c.id) !== -1;
         if (sortable) {
           headerCells += '<th onclick="sortPos(\''+c.id+'\')" style="cursor:pointer;user-select:none;">'+c.label+' <span class="sort-arrow" id="arr-'+c.id+'"></span></th>';
         } else if (c.id === 'close') {
@@ -507,7 +507,7 @@
       document.querySelector('.pos-table thead tr').innerHTML = headerCells;
 
       // update sort arrows
-      ['size','sizeUsdt','entry','mark','liq','pnl','roe','leverage','chg24','funding','opened','duration'].forEach(function(c){
+      ['size','entry','mark','liq','pnl','roe','leverage','chg24','funding','opened','duration'].forEach(function(c){
         var el = document.getElementById('arr-'+c);
         if (!el) return;
         el.innerText = c === posSortCol ? (posSortAsc ? '↑' : '↓') : '';
@@ -536,8 +536,7 @@
         var rankBadge = rank > 0 ? ' <span style="font-size:0.7rem;color:#f0b90b;font-weight:700;">(#'+rank+')</span>' : '';
 
         var cellMap = {
-          size:     '<td>' + Math.abs(amt).toFixed(4) + '</td>',
-          sizeUsdt: '<td>' + notional.toFixed(2) + ' $</td>',
+          size:     '<td style="line-height:1.5;">' + Math.abs(amt).toFixed(4) + '<br><span style="font-size:0.72rem;color:#888;">' + notional.toFixed(2) + ' $</span></td>',
           entry:    '<td>' + fmtPrice(entry) + '</td>',
           mark:     '<td>' + fmtPrice(mark) + '</td>',
           liq:      '<td class="' + (liq > 0 ? 'down' : 'flat') + '">' + (liq > 0 ? fmtPrice(liq) : '--') + '</td>',
@@ -789,7 +788,6 @@
     ];
     var POS_COLS_DEFAULT = [
       { id:'size',     label:'Size',           visible:true },
-      { id:'sizeUsdt', label:'Size (USDT)',     visible:true },
       { id:'entry',    label:'Entry Price',    visible:true },
       { id:'mark',     label:'Mark Price',     visible:true },
       { id:'liq',      label:'Liq Price',      visible:true },
