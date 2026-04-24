@@ -321,6 +321,11 @@
         <label>Auto TP Target Profit (USDT)</label>
         <input type="number" id="cfg-tp" min="0.01" step="0.1" value="0.3" />
       </div>
+      <div class="cfg-row">
+        <label>Google Sheet Sync URL <span style="color:#555;font-size:0.68rem;text-transform:none;letter-spacing:0;">(Apps Script Web App URL)</span></label>
+        <input type="text" id="cfg-sheet-url" placeholder="https://script.google.com/macros/s/.../exec" style="font-size:0.72rem;" />
+        <div id="cfg-sheet-status" style="margin-top:0.35rem;font-size:0.72rem;color:#555;"></div>
+      </div>
       <div class="cfg-btns">
         <button class="cfg-save" onclick="saveConfig()">Save</button>
         <button class="cfg-close" onclick="closeConfig()">Close</button>
@@ -694,6 +699,7 @@
     var shortStatuses           = {}; // symbol -> { state, msg, orderId }
     var defaultShortMargin      = parseFloat(localStorage.getItem('shortMargin') || '1');
     var defaultTpTarget         = parseFloat(localStorage.getItem('tpTarget')    || '0.3');
+    var sheetUrl                = localStorage.getItem('sheetUrl') || '';
     var tpMap                   = {}; // symbol -> true if TP order exists
     var fundingMap              = {}; // symbol -> { rate, intervalHours }
     var posOpenTimeMap          = {}; // symbol -> open timestamp (ms), fetched once per session
@@ -1043,19 +1049,68 @@
     }
 
     function openConfig() {
-      document.getElementById('cfg-margin').value = defaultShortMargin;
-      document.getElementById('cfg-tp').value = defaultTpTarget;
+      document.getElementById('cfg-margin').value    = defaultShortMargin;
+      document.getElementById('cfg-tp').value        = defaultTpTarget;
+      document.getElementById('cfg-sheet-url').value = sheetUrl;
+      var statusEl = document.getElementById('cfg-sheet-status');
+      statusEl.innerText = sheetUrl ? '✅ URL saved — config synced from Google Sheet' : '';
       document.getElementById('config-overlay').classList.add('open');
     }
     function closeConfig() {
       document.getElementById('config-overlay').classList.remove('open');
     }
-    function saveConfig() {
+    async function saveConfig() {
       defaultShortMargin = parseFloat(document.getElementById('cfg-margin').value) || 1;
       defaultTpTarget    = parseFloat(document.getElementById('cfg-tp').value) || 0.3;
+      var newUrl         = document.getElementById('cfg-sheet-url').value.trim();
+      sheetUrl           = newUrl;
       localStorage.setItem('shortMargin', defaultShortMargin);
-      localStorage.setItem('tpTarget', defaultTpTarget);
-      closeConfig();
+      localStorage.setItem('tpTarget',    defaultTpTarget);
+      localStorage.setItem('sheetUrl',    sheetUrl);
+      var statusEl = document.getElementById('cfg-sheet-status');
+      if (sheetUrl) {
+        statusEl.style.color = '#f0b90b';
+        statusEl.innerText   = 'Syncing...';
+        try {
+          var r = await fetch(sheetUrl, {
+            method: 'POST',
+            body: JSON.stringify({ shortMargin: defaultShortMargin, tpTarget: defaultTpTarget })
+          });
+          var json = await r.json();
+          if (json.ok) {
+            statusEl.style.color = '#4ade80';
+            statusEl.innerText   = '✅ Saved to Google Sheet';
+          } else {
+            statusEl.style.color = '#f87171';
+            statusEl.innerText   = '❌ Sheet error: ' + JSON.stringify(json);
+          }
+        } catch(e) {
+          statusEl.style.color = '#f87171';
+          statusEl.innerText   = '❌ Failed to reach Sheet: ' + (e.message || e);
+        }
+      } else {
+        closeConfig();
+      }
+    }
+
+    async function loadConfigFromSheet() {
+      if (!sheetUrl) return;
+      try {
+        // Apps Script GET requires no-cors workaround — use jsonp-style via fetch with redirect follow
+        var r    = await fetch(sheetUrl + '?_=' + Date.now());
+        var json = await r.json();
+        if (json.shortMargin !== undefined) {
+          defaultShortMargin = parseFloat(json.shortMargin) || 1;
+          localStorage.setItem('shortMargin', defaultShortMargin);
+        }
+        if (json.tpTarget !== undefined) {
+          defaultTpTarget = parseFloat(json.tpTarget) || 0.3;
+          localStorage.setItem('tpTarget', defaultTpTarget);
+        }
+        console.log('[Sheet sync] margin=' + defaultShortMargin + ' tp=' + defaultTpTarget);
+      } catch(e) {
+        console.warn('[Sheet sync] Failed to load config:', e);
+      }
     }
 
     function loadRanking() {
@@ -1269,6 +1324,7 @@
     loadPositions(); // load futures positions if API key is set
     loadBalance();   // load balance cards if API key is set
     loadFundingData(); // preload funding rates
+    loadConfigFromSheet(); // sync config from Google Sheet if URL set
 
     /* ── Sync top/bottom scrollbars for ranking table ── */
     (function() {
