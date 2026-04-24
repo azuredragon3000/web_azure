@@ -934,34 +934,41 @@
 
     async function autoSetTP(symbol, avgPrice, execQty) {
       var ei       = exInfoCache.futures && exInfoCache.futures[symbol];
-      var tickSize = (ei && ei.tick && ei.tick !== '--') ? ei.tick : 0.01;
+      var tickSize = (ei && ei.tick && ei.tick !== '--') ? parseFloat(ei.tick) : 0.01;
       var tpPrice  = parseFloat(avgPrice) - (defaultTpTarget / parseFloat(execQty));
       tpPrice = (Math.round(tpPrice / tickSize) * tickSize).toFixed(countDecimals(tickSize));
       try {
         var r = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/order', {
           symbol: symbol, side: 'BUY', positionSide: 'SHORT',
           type: 'TAKE_PROFIT_MARKET', stopPrice: tpPrice,
-          closePosition: 'true', workingType: 'MARK_PRICE', priceProtect: 'true'
+          closePosition: 'true', workingType: 'MARK_PRICE'
         });
         if (r.orderId) {
           tpMap[symbol] = true;
           setShortStatus(symbol, 'FILLED', 'Filled + TP @$' + tpPrice);
           renderPositions();
         } else {
-          setShortStatus(symbol, 'FILLED', 'Filled (TP err: ' + (r.msg || '?') + ')');
+          setShortStatus(symbol, 'FILLED', 'Filled (TP err: ' + (r.msg || r.code || '?') + ')');
         }
-      } catch(e) { setShortStatus(symbol, 'FILLED', 'Filled (TP err)'); }
+      } catch(e) { setShortStatus(symbol, 'FILLED', 'Filled (TP ex: ' + (e.message||'?') + ')'); }
     }
 
     async function pollOrder(symbol, orderId) {
       try {
         var o = await binanceAuth('https://fapi.binance.com', '/fapi/v1/order', { symbol: symbol, orderId: orderId });
+        if (o.code) {
+          // Binance API error — keep polling, update status
+          setShortStatus(symbol, 'PENDING', 'Pending (retry...)');
+          setTimeout(function(){ pollOrder(symbol, orderId); }, 5000);
+          return;
+        }
         if (o.status === 'FILLED') {
           setShortStatus(symbol, 'FILLED', 'Filled — setting TP...');
           await autoSetTP(symbol, o.avgPrice, o.executedQty);
           return;
         }
         if (['CANCELED','EXPIRED','REJECTED'].indexOf(o.status) !== -1) { setShortStatus(symbol, 'ERR', o.status); return; }
+        setShortStatus(symbol, 'PENDING', 'Pending (' + o.status + ')');
         setTimeout(function(){ pollOrder(symbol, orderId); }, 3000);
       } catch(e) { setTimeout(function(){ pollOrder(symbol, orderId); }, 5000); }
     }
@@ -1194,6 +1201,11 @@
           });
 
           document.getElementById('table-body').innerHTML = rows.join('');
+          // Re-apply stored short statuses after re-render (preserves pending/filled state)
+          Object.keys(shortStatuses).forEach(function(sym) {
+            var s = shortStatuses[sym];
+            if (s && s.state) setShortStatus(sym, s.state, s.msg);
+          });
           if (market === 'futures') loadFundingData();
           document.getElementById('update-time').innerText = (market==='futures'?'Futures':'Spot') + ' · ' + new Date().toLocaleTimeString();
           document.getElementById('update-time').style.color = '#555';
