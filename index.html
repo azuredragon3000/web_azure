@@ -935,13 +935,15 @@
     async function autoSetTP(symbol, avgPrice, execQty) {
       var ei       = exInfoCache.futures && exInfoCache.futures[symbol];
       var tickSize = (ei && ei.tick && ei.tick !== '--') ? parseFloat(ei.tick) : 0.01;
+      var stepSize = (ei && ei.step) ? parseFloat(ei.step) : 0.001;
       var tpPrice  = parseFloat(avgPrice) - (defaultTpTarget / parseFloat(execQty));
       tpPrice = (Math.round(tpPrice / tickSize) * tickSize).toFixed(countDecimals(tickSize));
+      var qtyFmt   = parseFloat(execQty).toFixed(countDecimals(stepSize));
       try {
         var r = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/order', {
           symbol: symbol, side: 'BUY', positionSide: 'SHORT',
           type: 'TAKE_PROFIT_MARKET', stopPrice: tpPrice,
-          closePosition: 'true', workingType: 'MARK_PRICE'
+          quantity: qtyFmt, workingType: 'MARK_PRICE'
         });
         if (r.orderId) {
           tpMap[symbol] = true;
