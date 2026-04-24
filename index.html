@@ -394,9 +394,20 @@
       return Array.from(new Uint8Array(sig)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
     }
 
+    // Clock offset vs Binance server time (ms). Corrects -1021 timestamp errors.
+    var _binanceTimeOffset = 0;
+    (function syncBinanceTime() {
+      fetch('https://fapi.binance.com/fapi/v1/time')
+        .then(function(r){ return r.json(); })
+        .then(function(d){ _binanceTimeOffset = d.serverTime - Date.now(); })
+        .catch(function(){});
+      // Re-sync every 10 minutes
+      setTimeout(syncBinanceTime, 600000);
+    })();
+
     async function binanceAuth(baseUrl, path, params) {
       params = params || {};
-      params.timestamp = Date.now();
+      params.timestamp = Date.now() + _binanceTimeOffset;
       var qs  = Object.keys(params).map(function(k){ return k+'='+encodeURIComponent(params[k]); }).join('&');
       var sig = await hmac256(BINANCE_SECRET_KEY, qs);
       var url = baseUrl + path + '?' + qs + '&signature=' + sig;
@@ -406,7 +417,7 @@
 
     async function binanceAuthPost(baseUrl, path, params) {
       params = params || {};
-      params.timestamp  = Date.now();
+      params.timestamp  = Date.now() + _binanceTimeOffset;
       params.recvWindow = 5000;
       var qs  = Object.keys(params).map(function(k){ return k+'='+encodeURIComponent(params[k]); }).join('&');
       var sig = await hmac256(BINANCE_SECRET_KEY, qs);
