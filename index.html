@@ -1052,8 +1052,12 @@
       document.getElementById('cfg-margin').value    = defaultShortMargin;
       document.getElementById('cfg-tp').value        = defaultTpTarget;
       document.getElementById('cfg-sheet-url').value = sheetUrl;
+      var last = localStorage.getItem('sheetLastSync');
       var statusEl = document.getElementById('cfg-sheet-status');
-      statusEl.innerText = sheetUrl ? '✅ URL saved — config synced from Google Sheet' : '';
+      statusEl.style.color = '#555';
+      statusEl.innerText = sheetUrl
+        ? '✅ Syncing every 30s' + (last ? ' · last: ' + last : '')
+        : '';
       document.getElementById('config-overlay').classList.add('open');
     }
     function closeConfig() {
@@ -1096,21 +1100,25 @@
     async function loadConfigFromSheet() {
       if (!sheetUrl) return;
       try {
-        // Apps Script GET requires no-cors workaround — use jsonp-style via fetch with redirect follow
         var r    = await fetch(sheetUrl + '?_=' + Date.now());
         var json = await r.json();
+        var changed = false;
         if (json.shortMargin !== undefined) {
-          defaultShortMargin = parseFloat(json.shortMargin) || 1;
-          localStorage.setItem('shortMargin', defaultShortMargin);
+          var v = parseFloat(json.shortMargin) || 1;
+          if (v !== defaultShortMargin) { defaultShortMargin = v; localStorage.setItem('shortMargin', v); changed = true; }
         }
         if (json.tpTarget !== undefined) {
-          defaultTpTarget = parseFloat(json.tpTarget) || 0.3;
-          localStorage.setItem('tpTarget', defaultTpTarget);
+          var v2 = parseFloat(json.tpTarget) || 0.3;
+          if (v2 !== defaultTpTarget) { defaultTpTarget = v2; localStorage.setItem('tpTarget', v2); changed = true; }
         }
-        console.log('[Sheet sync] margin=' + defaultShortMargin + ' tp=' + defaultTpTarget);
+        var now = new Date().toLocaleTimeString();
+        localStorage.setItem('sheetLastSync', now);
+        if (changed) console.log('[Sheet sync] Updated — margin=' + defaultShortMargin + ' tp=' + defaultTpTarget);
       } catch(e) {
-        console.warn('[Sheet sync] Failed to load config:', e);
+        console.warn('[Sheet sync] Failed:', e);
       }
+      // poll again in 30s
+      setTimeout(loadConfigFromSheet, 30000);
     }
 
     function loadRanking() {
