@@ -121,14 +121,30 @@
     .info-close-btn:hover { border-color:#555; color:#ccc; }
 
     /* Config modal */
-    #config-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:2000; align-items:center; justify-content:center; }
+    #config-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:2000; align-items:center; justify-content:center; overflow-y:auto; padding:1rem 0; }
     #config-overlay.open { display:flex; }
-    #config-box { background:#1a1a2e; border:1px solid #2a2a4a; border-radius:12px; padding:2rem; width:360px; max-width:90vw; }
-    #config-box h3 { color:#f0b90b; font-size:1rem; letter-spacing:1px; text-transform:uppercase; margin-bottom:1.2rem; }
+    #config-box { background:#1a1a2e; border:1px solid #2a2a4a; border-radius:12px; padding:2rem; width:520px; max-width:96vw; }
+    #config-box h3 { color:#f0b90b; font-size:1rem; letter-spacing:1px; text-transform:uppercase; margin-bottom:1rem; }
+    .cfg-tabs { display:flex; gap:0.4rem; margin-bottom:1.4rem; border-bottom:1px solid #2a2a4a; padding-bottom:0.8rem; flex-wrap:wrap; }
+    .cfg-tab { padding:0.3rem 0.9rem; border-radius:20px; border:1px solid #2a2a4a; background:transparent; color:#888; font-size:0.75rem; cursor:pointer; transition:all 0.2s; }
+    .cfg-tab.active { background:#f0b90b; border-color:#f0b90b; color:#0f0f0f; font-weight:700; }
+    .cfg-panel { display:none; }
+    .cfg-panel.active { display:block; }
     .cfg-row { margin-bottom:1rem; }
     .cfg-row label { display:block; font-size:0.72rem; letter-spacing:1px; color:#888; text-transform:uppercase; margin-bottom:0.4rem; }
-    .cfg-row input { width:100%; padding:0.5rem 0.8rem; background:#0f0f0f; border:1px solid #2a2a4a; border-radius:6px; color:#f0f0f0; font-size:0.95rem; font-family:monospace; }
+    .cfg-row input { width:100%; padding:0.5rem 0.8rem; background:#0f0f0f; border:1px solid #2a2a4a; border-radius:6px; color:#f0f0f0; font-size:0.95rem; font-family:monospace; box-sizing:border-box;}
     .cfg-row input:focus { outline:none; border-color:#f0b90b; }
+    /* Column list */
+    .col-list { list-style:none; padding:0; margin:0; max-height:320px; overflow-y:auto; }
+    .col-list li { display:flex; align-items:center; gap:0.6rem; padding:0.45rem 0.6rem; border-radius:6px; cursor:grab; border:1px solid transparent; transition:background 0.15s; user-select:none; }
+    .col-list li:hover { background:#0d1a0d; border-color:#1e3a1e; }
+    .col-list li.drag-over { border-color:#f0b90b; background:#1a1500; }
+    .col-list li.dragging { opacity:0.4; }
+    .col-drag { color:#444; font-size:0.9rem; cursor:grab; flex-shrink:0; }
+    .col-check { width:15px; height:15px; accent-color:#f0b90b; flex-shrink:0; cursor:pointer; }
+    .col-lbl { font-size:0.82rem; color:#ccc; flex:1; }
+    .col-lbl.disabled { color:#444; text-decoration:line-through; }
+    .col-always { font-size:0.68rem; color:#555; flex-shrink:0; }
     .cfg-btns { display:flex; gap:0.6rem; margin-top:1.4rem; }
     .cfg-save { flex:1; padding:0.5rem; background:#f0b90b; color:#0f0f0f; border:none; border-radius:6px; font-weight:700; font-size:0.88rem; cursor:pointer; }
     .cfg-close { padding:0.5rem 1rem; background:transparent; color:#888; border:1px solid #2a2a4a; border-radius:6px; font-size:0.88rem; cursor:pointer; }
@@ -190,25 +206,7 @@
     <div id="pos-error" style="display:none;max-width:1100px;margin:0 auto 1rem;padding:0.8rem 1rem;background:#2a0a0a;border:1px solid #f87171;border-radius:8px;color:#f87171;font-size:0.82rem;font-family:monospace;"></div>
     <div class="pos-wrap" id="pos-wrap" style="display:none">
       <table class="pos-table">
-        <thead>
-          <tr>
-            <th>Coin</th>
-            <th onclick="sortPos('size')"     style="cursor:pointer;user-select:none;">Size <span class="sort-arrow" id="arr-size"></span></th>
-            <th onclick="sortPos('entry')"    style="cursor:pointer;user-select:none;">Entry Price <span class="sort-arrow" id="arr-entry"></span></th>
-            <th onclick="sortPos('mark')"     style="cursor:pointer;user-select:none;">Mark Price <span class="sort-arrow" id="arr-mark"></span></th>
-            <th onclick="sortPos('liq')"      style="cursor:pointer;user-select:none;">Liq Price <span class="sort-arrow" id="arr-liq"></span></th>
-            <th onclick="sortPos('pnl')"      style="cursor:pointer;user-select:none;">Unrealized PnL <span class="sort-arrow" id="arr-pnl"></span></th>
-            <th onclick="sortPos('roe')"      style="cursor:pointer;user-select:none;">ROE % <span class="sort-arrow" id="arr-roe"></span></th>
-            <th style="text-align:center;">Close</th>
-            <th onclick="sortPos('leverage')" style="cursor:pointer;user-select:none;">Leverage <span class="sort-arrow" id="arr-leverage"></span></th>
-            <th onclick="sortPos('chg24')"    style="cursor:pointer;user-select:none;">24h Chg % <span class="sort-arrow" id="arr-chg24"></span></th>
-            <th onclick="sortPos('funding')"   style="cursor:pointer;user-select:none;">Funding <span class="sort-arrow" id="arr-funding"></span></th>
-            <th onclick="sortPos('opened')"    style="cursor:pointer;user-select:none;">Opened <span class="sort-arrow" id="arr-opened"></span></th>
-            <th onclick="sortPos('duration')"  style="cursor:pointer;user-select:none;">Duration <span class="sort-arrow" id="arr-duration"></span></th>
-            <th style="text-align:center;">TP/SL</th>
-            <th>Margin Type</th>
-          </tr>
-        </thead>
+        <thead><tr></tr></thead>
         <tbody id="pos-body"></tbody>
       </table>
     </div>
@@ -267,21 +265,7 @@
     <div class="scroll-top" id="ranking-scroll-top"><div class="scroll-top-inner" id="ranking-scroll-top-inner"></div></div>
     <div class="table-wrap" id="ranking-wrap">
     <table id="ranking-table">
-      <thead>
-        <tr>
-          <th>#&nbsp;Coin</th>
-          <th>Price (USDT)</th>
-          <th>24h Chg %</th>
-          <th style="text-align:right;">Funding</th>
-          <th>Tick Size</th>
-          <th>Min Notional</th>
-          <th>Taker Fee</th>
-          <th>Maker Fee</th>
-          <th>Future Pos</th>
-          <th style="text-align:center;">Short</th>
-          <th style="text-align:center;">Status</th>
-        </tr>
-      </thead>
+      <thead><tr></tr></thead>
       <tbody id="table-body">
         <tr><td colspan="11" style="text-align:center;color:#555;padding:2rem;">Loading...</td></tr>
       </tbody>
@@ -313,19 +297,41 @@
   <div id="config-overlay" onclick="if(event.target===this)closeConfig();">
     <div id="config-box">
       <h3>⚙️ Config</h3>
-      <div class="cfg-row">
-        <label>Default Short Margin (USD)</label>
-        <input type="number" id="cfg-margin" min="0.5" step="0.5" value="1" />
+      <div class="cfg-tabs">
+        <button class="cfg-tab active" onclick="cfgTab('general',this)">General</button>
+        <button class="cfg-tab" onclick="cfgTab('cols-gainers',this)">Gainers Columns</button>
+        <button class="cfg-tab" onclick="cfgTab('cols-pos',this)">Positions Columns</button>
       </div>
-      <div class="cfg-row">
-        <label>Auto TP Target Profit (USDT)</label>
-        <input type="number" id="cfg-tp" min="0.01" step="0.1" value="0.3" />
+
+      <!-- General panel -->
+      <div class="cfg-panel active" id="cfgp-general">
+        <div class="cfg-row">
+          <label>Default Short Margin (USD)</label>
+          <input type="number" id="cfg-margin" min="0.5" step="0.5" value="1" />
+        </div>
+        <div class="cfg-row">
+          <label>Auto TP Target Profit (USDT)</label>
+          <input type="number" id="cfg-tp" min="0.01" step="0.1" value="0.3" />
+        </div>
+        <div class="cfg-row">
+          <label>Google Sheet Sync URL <span style="color:#555;font-size:0.68rem;text-transform:none;letter-spacing:0;">(Apps Script Web App URL)</span></label>
+          <input type="text" id="cfg-sheet-url" placeholder="https://script.google.com/macros/s/.../exec" style="font-size:0.72rem;" />
+          <div id="cfg-sheet-status" style="margin-top:0.35rem;font-size:0.72rem;color:#555;"></div>
+        </div>
       </div>
-      <div class="cfg-row">
-        <label>Google Sheet Sync URL <span style="color:#555;font-size:0.68rem;text-transform:none;letter-spacing:0;">(Apps Script Web App URL)</span></label>
-        <input type="text" id="cfg-sheet-url" placeholder="https://script.google.com/macros/s/.../exec" style="font-size:0.72rem;" />
-        <div id="cfg-sheet-status" style="margin-top:0.35rem;font-size:0.72rem;color:#555;"></div>
+
+      <!-- Gainers Columns panel -->
+      <div class="cfg-panel" id="cfgp-cols-gainers">
+        <p style="font-size:0.72rem;color:#555;margin-bottom:0.8rem;">Drag to reorder · toggle checkbox to show/hide</p>
+        <ul class="col-list" id="cfg-gainers-cols"></ul>
       </div>
+
+      <!-- Positions Columns panel -->
+      <div class="cfg-panel" id="cfgp-cols-pos">
+        <p style="font-size:0.72rem;color:#555;margin-bottom:0.8rem;">Drag to reorder · toggle checkbox to show/hide</p>
+        <ul class="col-list" id="cfg-pos-cols"></ul>
+      </div>
+
       <div class="cfg-btns">
         <button class="cfg-save" onclick="saveConfig()">Save</button>
         <button class="cfg-close" onclick="closeConfig()">Close</button>
@@ -477,7 +483,25 @@
     }
 
     function renderPositions() {
-      // update arrows
+      var vis = posColConfig.filter(function(c){ return c.visible; });
+
+      // Build header dynamically
+      var headerCells = '<th>Coin</th>';
+      vis.forEach(function(c) {
+        var sortable = ['size','entry','mark','liq','pnl','roe','leverage','chg24','funding','opened','duration'].indexOf(c.id) !== -1;
+        if (sortable) {
+          headerCells += '<th onclick="sortPos(\''+c.id+'\')" style="cursor:pointer;user-select:none;">'+c.label+' <span class="sort-arrow" id="arr-'+c.id+'"></span></th>';
+        } else if (c.id === 'close') {
+          headerCells += '<th style="text-align:center;">Close</th>';
+        } else if (c.id === 'tpsl') {
+          headerCells += '<th style="text-align:center;">TP/SL</th>';
+        } else {
+          headerCells += '<th>'+c.label+'</th>';
+        }
+      });
+      document.querySelector('.pos-table thead tr').innerHTML = headerCells;
+
+      // update sort arrows
       ['size','entry','mark','liq','pnl','roe','leverage','chg24','funding','opened','duration'].forEach(function(c){
         var el = document.getElementById('arr-'+c);
         if (!el) return;
@@ -489,6 +513,7 @@
         var diff = fn(a) - fn(b);
         return posSortAsc ? diff : -diff;
       });
+
       var rows = sorted.map(function(p) {
         var amt      = parseFloat(p.positionAmt);
         var isLong   = amt > 0;
@@ -504,63 +529,66 @@
         var chg      = parseFloat(pos24hMap[p.symbol] || 0);
         var rank     = posGainerRankMap[p.symbol] || 0;
         var rankBadge = rank > 0 ? ' <span style="font-size:0.7rem;color:#f0b90b;font-weight:700;">(#'+rank+')</span>' : '';
-        return '<tr>'
-          + '<td><div style="display:flex;align-items:center;gap:0.4rem;">'
-          +   '<div class="coin-icon">' + lbl.substring(0,4) + '</div>'
-          +   '<div>'
-          +     '<div class="coin-symbol">' + lbl + '</div>'
-          +     (isLong ? '<span class="long-badge">LONG</span>' : '<span class="short-badge">SHORT</span>')
-          +   '</div>'
-          + '</div></td>'
-          + '<td>' + Math.abs(amt).toFixed(4) + '</td>'
-          + '<td>' + fmtPrice(entry) + '</td>'
-          + '<td>' + fmtPrice(mark)  + '</td>'
-          + '<td class="' + (liq > 0 ? 'down' : 'flat') + '">' + (liq > 0 ? fmtPrice(liq) : '--') + '</td>'
-          + '<td class="' + (pnl >= 0 ? 'up' : 'down') + '">' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' $</td>'
-          + '<td class="' + (roe >= 0 ? 'up' : 'down') + '">' + (roe >= 0 ? '+' : '') + roe.toFixed(2) + '%</td>'
-          + (function(){
-              var closing = closeStatuses[p.symbol] && closeStatuses[p.symbol].closing;
-              if (closing) return '<td style="text-align:center;"><span style="color:#f0b90b;font-size:0.72rem;">Closing...</span></td>';
-              return '<td style="text-align:center;">'
-                + '<button onclick="closePosition(\''+p.symbol+'\',\''+Math.abs(amt).toFixed(8)+'\','+isLong+')" '
-                + 'style="padding:0.15rem 0.55rem;border-radius:4px;border:1px solid #f87171;background:transparent;color:#f87171;font-size:0.72rem;cursor:pointer;">Close</button>'
-                + '</td>';
-            })()
-          + '<td>' + lev + 'x</td>'
-          + '<td class="' + (chg > 0 ? 'up' : chg < 0 ? 'down' : 'flat') + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%' + rankBadge + '</td>'
-          + (function(){
-              var fd = fundingMap[p.symbol];
-              if (!fd) return '<td style="color:#555;">-</td>';
-              var rColor  = fd.rate > 0 ? '#4ade80' : fd.rate < 0 ? '#f87171' : '#888';
-              var feeAbs  = Math.abs(fd.rate / 100) * Math.abs(amt) * mark;
-              return '<td style="color:' + rColor + ';font-family:monospace;line-height:1.5;">'
-                + (fd.rate >= 0 ? '+' : '') + fd.rate.toFixed(4) + ' (' + fd.intervalHours + 'h)'
-                + '<br><span style="font-size:0.72rem;color:#888;">(est: $' + feeAbs.toFixed(5) + ')</span>'
-                + '</td>';
-            })()
-          + (function(){
-              var ts = posOpenTimeMap[p.symbol];
-              if (!ts) return '<td style="color:#555;">-</td><td style="color:#555;">-</td>';
-              var d  = new Date(ts);
-              var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-              var openedStr = d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear()
-                + '<br><span style="font-size:0.72rem;color:#888;">' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + '</span>';
-              var ms   = Date.now() - ts;
-              var days = Math.floor(ms / 86400000);
-              var hrs  = Math.floor((ms % 86400000) / 3600000);
-              var mins = Math.floor((ms % 3600000) / 60000);
-              var durStr = days > 0 ? days + 'd ' + hrs + 'h' : hrs > 0 ? hrs + 'h ' + mins + 'm' : mins + 'm';
-              return '<td style="color:#aaa;font-size:0.8rem;line-height:1.5;">' + openedStr + '</td>'
-                   + '<td style="color:#f0b90b;font-family:monospace;">' + durStr + '</td>';
-            })()
-          + '<td style="text-align:center;font-weight:700;">' + (function(){
-              var tp = tpMap[p.symbol];
-              if (!tp) return '<span style="color:#555;">-</span>';
-              return '<span style="color:#4ade80;">YES</span>'
-                + (tp.price ? '<br><span style="font-size:0.68rem;color:#888;">@$'+parseFloat(tp.price).toPrecision(4)+'</span>' : '');
-            })() + '</td>'
-          + '<td style="color:#888;">' + margin + '</td>'
-          + '</tr>';
+
+        var cellMap = {
+          size:     '<td>' + Math.abs(amt).toFixed(4) + '</td>',
+          entry:    '<td>' + fmtPrice(entry) + '</td>',
+          mark:     '<td>' + fmtPrice(mark) + '</td>',
+          liq:      '<td class="' + (liq > 0 ? 'down' : 'flat') + '">' + (liq > 0 ? fmtPrice(liq) : '--') + '</td>',
+          pnl:      '<td class="' + (pnl >= 0 ? 'up' : 'down') + '">' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' $</td>',
+          roe:      '<td class="' + (roe >= 0 ? 'up' : 'down') + '">' + (roe >= 0 ? '+' : '') + roe.toFixed(2) + '%</td>',
+          close:    (function(){
+                      var closing = closeStatuses[p.symbol] && closeStatuses[p.symbol].closing;
+                      if (closing) return '<td style="text-align:center;"><span style="color:#f0b90b;font-size:0.72rem;">Closing...</span></td>';
+                      return '<td style="text-align:center;"><button onclick="closePosition(\''+p.symbol+'\',\''+Math.abs(amt).toFixed(8)+'\','+isLong+')" style="padding:0.15rem 0.55rem;border-radius:4px;border:1px solid #f87171;background:transparent;color:#f87171;font-size:0.72rem;cursor:pointer;">Close</button></td>';
+                    })(),
+          leverage: '<td>' + lev + 'x</td>',
+          chg24:    '<td class="' + (chg > 0 ? 'up' : chg < 0 ? 'down' : 'flat') + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%' + rankBadge + '</td>',
+          funding:  (function(){
+                      var fd = fundingMap[p.symbol];
+                      if (!fd) return '<td style="color:#555;">-</td>';
+                      var rColor = fd.rate > 0 ? '#4ade80' : fd.rate < 0 ? '#f87171' : '#888';
+                      var feeAbs = Math.abs(fd.rate / 100) * Math.abs(amt) * mark;
+                      return '<td style="color:' + rColor + ';font-family:monospace;line-height:1.5;">'
+                        + (fd.rate >= 0 ? '+' : '') + fd.rate.toFixed(4) + ' (' + fd.intervalHours + 'h)'
+                        + '<br><span style="font-size:0.72rem;color:#888;">(est: $' + feeAbs.toFixed(5) + ')</span></td>';
+                    })(),
+          opened:   (function(){
+                      var ts = posOpenTimeMap[p.symbol];
+                      if (!ts) return '<td style="color:#555;">-</td>';
+                      var d = new Date(ts);
+                      var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                      return '<td style="color:#aaa;font-size:0.8rem;line-height:1.5;">'
+                        + d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear()
+                        + '<br><span style="font-size:0.72rem;color:#888;">' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + '</span></td>';
+                    })(),
+          duration: (function(){
+                      var ts = posOpenTimeMap[p.symbol];
+                      if (!ts) return '<td style="color:#555;">-</td>';
+                      var ms = Date.now() - ts;
+                      var days = Math.floor(ms / 86400000);
+                      var hrs  = Math.floor((ms % 86400000) / 3600000);
+                      var mins = Math.floor((ms % 3600000) / 60000);
+                      var durStr = days > 0 ? days + 'd ' + hrs + 'h' : hrs > 0 ? hrs + 'h ' + mins + 'm' : mins + 'm';
+                      return '<td style="color:#f0b90b;font-family:monospace;">' + durStr + '</td>';
+                    })(),
+          tpsl:     '<td style="text-align:center;font-weight:700;">' + (function(){
+                      var tp = tpMap[p.symbol];
+                      if (!tp) return '<span style="color:#555;">-</span>';
+                      return '<span style="color:#4ade80;">YES</span>'
+                        + (tp.price ? '<br><span style="font-size:0.68rem;color:#888;">@$'+parseFloat(tp.price).toPrecision(4)+'</span>' : '');
+                    })() + '</td>',
+          margin:   '<td style="color:#888;">' + margin + '</td>'
+        };
+
+        var row = '<tr><td><div style="display:flex;align-items:center;gap:0.4rem;">'
+          + '<div class="coin-icon">' + lbl.substring(0,4) + '</div>'
+          + '<div><div class="coin-symbol">' + lbl + '</div>'
+          + (isLong ? '<span class="long-badge">LONG</span>' : '<span class="short-badge">SHORT</span>')
+          + '</div></div></td>';
+        vis.forEach(function(c){ row += cellMap[c.id] || ''; });
+        row += '</tr>';
+        return row;
       });
       document.getElementById('pos-body').innerHTML = rows.join('');
     }
@@ -715,6 +743,53 @@
     var defaultShortMargin      = parseFloat(localStorage.getItem('shortMargin') || '1');
     var defaultTpTarget         = parseFloat(localStorage.getItem('tpTarget')    || '0.3');
     var sheetUrl                = localStorage.getItem('sheetUrl') || '';
+
+    /* ── Column config defaults ── */
+    var GAINERS_COLS_DEFAULT = [
+      { id:'price',     label:'Price (USDT)',  visible:true },
+      { id:'chg24',     label:'24h Chg %',     visible:true },
+      { id:'funding',   label:'Funding',       visible:true },
+      { id:'tick',      label:'Tick Size',     visible:true },
+      { id:'minN',      label:'Min Notional',  visible:true },
+      { id:'taker',     label:'Taker Fee',     visible:true },
+      { id:'maker',     label:'Maker Fee',     visible:true },
+      { id:'futurePos', label:'Future Pos',    visible:true },
+      { id:'short',     label:'Short',         visible:true, always:true },
+      { id:'status',    label:'Status',        visible:true }
+    ];
+    var POS_COLS_DEFAULT = [
+      { id:'size',     label:'Size',           visible:true },
+      { id:'entry',    label:'Entry Price',    visible:true },
+      { id:'mark',     label:'Mark Price',     visible:true },
+      { id:'liq',      label:'Liq Price',      visible:true },
+      { id:'pnl',      label:'Unrealized PnL', visible:true },
+      { id:'roe',      label:'ROE %',          visible:true },
+      { id:'close',    label:'Close',          visible:true, always:true },
+      { id:'leverage', label:'Leverage',       visible:true },
+      { id:'chg24',    label:'24h Chg %',      visible:true },
+      { id:'funding',  label:'Funding',        visible:true },
+      { id:'opened',   label:'Opened',         visible:true },
+      { id:'duration', label:'Duration',       visible:true },
+      { id:'tpsl',     label:'TP/SL',          visible:true },
+      { id:'margin',   label:'Margin Type',    visible:true }
+    ];
+    function loadColConfig(key, defaults) {
+      try {
+        var saved = JSON.parse(localStorage.getItem(key));
+        if (!Array.isArray(saved)) return defaults.map(function(c){ return Object.assign({},c); });
+        // merge: keep order from saved, add any new defaults not yet saved
+        var merged = saved.map(function(s){
+          var def = defaults.find(function(d){ return d.id === s.id; });
+          return def ? Object.assign({},def,{visible:s.visible}) : null;
+        }).filter(Boolean);
+        defaults.forEach(function(d){
+          if (!merged.find(function(m){ return m.id===d.id; })) merged.push(Object.assign({},d));
+        });
+        return merged;
+      } catch(e) { return defaults.map(function(c){ return Object.assign({},c); }); }
+    }
+    var gainersColConfig = loadColConfig('gainersColConfig', GAINERS_COLS_DEFAULT);
+    var posColConfig     = loadColConfig('posColConfig',     POS_COLS_DEFAULT);
     var tpMap                   = {}; // symbol -> true if TP order exists
     var fundingMap              = {}; // symbol -> { rate, intervalHours }
     var posOpenTimeMap          = {}; // symbol -> open timestamp (ms), fetched once per session
@@ -1074,6 +1149,63 @@
       document.getElementById('info-overlay').classList.remove('open');
     }
 
+    function cfgTab(id, btn) {
+      document.querySelectorAll('.cfg-tab').forEach(function(b){ b.classList.remove('active'); });
+      document.querySelectorAll('.cfg-panel').forEach(function(p){ p.classList.remove('active'); });
+      btn.classList.add('active');
+      document.getElementById('cfgp-'+id).classList.add('active');
+    }
+
+    function buildColList(ulId, colConfig) {
+      var ul = document.getElementById(ulId);
+      ul.innerHTML = '';
+      colConfig.forEach(function(col, idx) {
+        var li = document.createElement('li');
+        li.dataset.id = col.id;
+        li.draggable = !col.always;
+        li.innerHTML =
+          '<span class="col-drag">' + (col.always ? '&nbsp;&nbsp;' : '⠿') + '</span>'
+          + '<input class="col-check" type="checkbox"' + (col.visible ? ' checked' : '') + (col.always ? ' disabled' : '') + ' />'
+          + '<span class="col-lbl' + (!col.visible ? ' disabled' : '') + '">' + col.label + '</span>'
+          + (col.always ? '<span class="col-always">always</span>' : '');
+        // checkbox toggle
+        li.querySelector('.col-check').addEventListener('change', function(e) {
+          col.visible = e.target.checked;
+          li.querySelector('.col-lbl').classList.toggle('disabled', !col.visible);
+        });
+        // drag-and-drop reorder
+        li.addEventListener('dragstart', function(e) {
+          li.classList.add('dragging');
+          e.dataTransfer.setData('text/plain', idx + '');
+        });
+        li.addEventListener('dragend', function() { li.classList.remove('dragging'); });
+        li.addEventListener('dragover', function(e) { e.preventDefault(); li.classList.add('drag-over'); });
+        li.addEventListener('dragleave', function() { li.classList.remove('drag-over'); });
+        li.addEventListener('drop', function(e) {
+          e.preventDefault();
+          li.classList.remove('drag-over');
+          var fromId = document.querySelector('#'+ulId+' li.dragging');
+          if (!fromId || fromId === li) return;
+          ul.insertBefore(fromId, li);
+        });
+        ul.appendChild(li);
+      });
+    }
+
+    function readColList(ulId, colConfig) {
+      var ul = document.getElementById(ulId);
+      var items = ul.querySelectorAll('li');
+      var newOrder = [];
+      items.forEach(function(li) {
+        var id  = li.dataset.id;
+        var def = colConfig.find(function(c){ return c.id === id; });
+        if (!def) return;
+        var vis = li.querySelector('.col-check').checked;
+        newOrder.push(Object.assign({}, def, { visible: vis }));
+      });
+      return newOrder;
+    }
+
     function openConfig() {
       document.getElementById('cfg-margin').value    = defaultShortMargin;
       document.getElementById('cfg-tp').value        = defaultTpTarget;
@@ -1084,6 +1216,10 @@
       statusEl.innerText = sheetUrl
         ? '✅ Syncing every 30s' + (last ? ' · last: ' + last : '')
         : '';
+      buildColList('cfg-gainers-cols', gainersColConfig);
+      buildColList('cfg-pos-cols', posColConfig);
+      // reset to General tab
+      cfgTab('general', document.querySelector('.cfg-tab'));
       document.getElementById('config-overlay').classList.add('open');
     }
     function closeConfig() {
@@ -1097,6 +1233,16 @@
       localStorage.setItem('shortMargin', defaultShortMargin);
       localStorage.setItem('tpTarget',    defaultTpTarget);
       localStorage.setItem('sheetUrl',    sheetUrl);
+
+      // save column configs
+      gainersColConfig = readColList('cfg-gainers-cols', gainersColConfig);
+      posColConfig     = readColList('cfg-pos-cols',     posColConfig);
+      localStorage.setItem('gainersColConfig', JSON.stringify(gainersColConfig.map(function(c){ return {id:c.id,visible:c.visible}; })));
+      localStorage.setItem('posColConfig',     JSON.stringify(posColConfig.map(function(c){     return {id:c.id,visible:c.visible}; })));
+
+      // re-render both tables with new config
+      renderPositions();
+      loadRanking();
       var statusEl = document.getElementById('cfg-sheet-status');
       if (sheetUrl) {
         statusEl.style.color = '#f0b90b';
@@ -1150,10 +1296,11 @@
     function loadRanking() {
       var isGainers = currentTab === 'gainers';
       var market = currentMarket;
+      var visColCount = gainersColConfig.filter(function(c){ return c.visible; }).length + 1;
       document.getElementById('update-time').innerText = 'Loading...';
       document.getElementById('update-time').style.color = '#555';
       document.getElementById('table-body').innerHTML =
-        '<tr><td colspan="11" style="text-align:center;color:#555;padding:2rem;">Fetching data...</td></tr>';
+        '<tr><td colspan="'+visColCount+'" style="text-align:center;color:#555;padding:2rem;">Fetching data...</td></tr>';
 
       var tickerUrl = market === 'futures'
         ? 'https://fapi.binance.com/fapi/v1/ticker/24hr'
@@ -1183,6 +1330,19 @@
             if (openPositions.length) renderPositions();
           }
           var accentColor = isGainers ? '#4ade80' : '#f87171';
+          var visG = gainersColConfig.filter(function(c){ return c.visible; });
+
+          // build dynamic header
+          var hdr = '<th>#&nbsp;Coin</th>';
+          visG.forEach(function(c){
+            if (c.id==='funding') hdr += '<th style="text-align:right;">Funding</th>';
+            else if (c.id==='short') hdr += '<th style="text-align:center;">Short</th>';
+            else if (c.id==='status') hdr += '<th style="text-align:center;">Status</th>';
+            else if (c.id==='futurePos') hdr += '<th>Future Pos</th>';
+            else hdr += '<th>'+c.label+'</th>';
+          });
+          document.querySelector('#ranking-table thead tr').innerHTML = hdr;
+
           var rows = top20.map(function(t, i) {
             var lbl = t.symbol.replace('USDT','');
             var ei  = exInfo[t.symbol] || { tick:'--', minN:'--', taker:'--', maker:'--' };
@@ -1191,33 +1351,30 @@
             var ssColor = { PENDING:'#f0b90b', FILLED:'#4ade80', ERR:'#f87171', WORKING:'#aaa' }[ssData.state] || '#555';
             var ssText  = ssData.msg || '-';
             var canShort = !ssData.state || ssData.state === 'ERR';
-            return '<tr>'
-              + '<td><div class="coin-cell">'
-              +   '<div class="coin-icon" style="color:'+accentColor+';font-size:0.75rem;">'+(i+1)+'</div>'
-              +   '<div><div class="coin-symbol">'+lbl+'</div><div class="coin-name">/ USDT</div></div>'
-              + '</div></td>'
-              + '<td class="price">'+fmtPrice(t.lastPrice)+'</td>'
-              + '<td class="chg '+chgClass(t.priceChangePercent)+'">' +fmtChg(t.priceChangePercent)+'</td>'
-              + (function(){
-                  var fd = fundingMap[t.symbol];
-                  if (!fd) return '<td style="text-align:right;color:#555;">-</td>';
-                  var rColor = fd.rate > 0 ? '#4ade80' : fd.rate < 0 ? '#f87171' : '#888';
-                  return '<td style="text-align:right;color:' + rColor + ';font-family:monospace;">' + (fd.rate >= 0 ? '+' : '') + fd.rate.toFixed(4) + ' (' + fd.intervalHours + 'h)</td>';
-                })()
-              + '<td class="mono">'+fmtTick(ei.tick)+'</td>'
-              + '<td class="mono">'+fmtMinN(ei.minN)+'</td>'
-              + '<td class="fee">'+ei.taker+'</td>'
-              + '<td class="fee">'+ei.maker+'</td>'
-              + '<td style="text-align:center;font-weight:700;color:'+(hasPos?'#4ade80':'#444')+';">'+(hasPos?'YES':'')+'</td>'
-              + '<td style="text-align:center;">'
-              + '<button onclick="placeShort(\''+t.symbol+'\','+parseFloat(t.lastPrice)+')" '
-              + (canShort ? '' : 'disabled ')
-              + 'style="padding:0.15rem 0.55rem;border-radius:4px;border:1px solid #f87171;background:transparent;color:#f87171;font-size:0.72rem;cursor:pointer;'+(canShort?'':'opacity:0.35;cursor:not-allowed;')+'">Short</button>'
-              + '</td>'
-              + '<td style="text-align:center;font-size:0.75rem;min-width:90px;" id="ss-'+t.symbol+'">'
-              + '<span style="color:'+ssColor+';">'+ssText+'</span>'
-              + '</td>'
-              + '</tr>';
+            var cellMap = {
+              price:     '<td class="price">'+fmtPrice(t.lastPrice)+'</td>',
+              chg24:     '<td class="chg '+chgClass(t.priceChangePercent)+'">'+fmtChg(t.priceChangePercent)+'</td>',
+              funding:   (function(){
+                           var fd = fundingMap[t.symbol];
+                           if (!fd) return '<td style="text-align:right;color:#555;">-</td>';
+                           var rColor = fd.rate > 0 ? '#4ade80' : fd.rate < 0 ? '#f87171' : '#888';
+                           return '<td style="text-align:right;color:'+rColor+';font-family:monospace;">'+(fd.rate>=0?'+':'')+fd.rate.toFixed(4)+' ('+fd.intervalHours+'h)</td>';
+                         })(),
+              tick:      '<td class="mono">'+fmtTick(ei.tick)+'</td>',
+              minN:      '<td class="mono">'+fmtMinN(ei.minN)+'</td>',
+              taker:     '<td class="fee">'+ei.taker+'</td>',
+              maker:     '<td class="fee">'+ei.maker+'</td>',
+              futurePos: '<td style="text-align:center;font-weight:700;color:'+(hasPos?'#4ade80':'#444')+';">'+(hasPos?'YES':'')+'</td>',
+              short:     '<td style="text-align:center;"><button onclick="placeShort(\''+t.symbol+'\','+parseFloat(t.lastPrice)+')" '+(canShort?'':'disabled ')+'style="padding:0.15rem 0.55rem;border-radius:4px;border:1px solid #f87171;background:transparent;color:#f87171;font-size:0.72rem;cursor:pointer;'+(canShort?'':'opacity:0.35;cursor:not-allowed;')+'">Short</button></td>',
+              status:    '<td style="text-align:center;font-size:0.75rem;min-width:90px;" id="ss-'+t.symbol+'"><span style="color:'+ssColor+';">'+ssText+'</span></td>'
+            };
+            var row = '<tr><td><div class="coin-cell">'
+              + '<div class="coin-icon" style="color:'+accentColor+';font-size:0.75rem;">'+(i+1)+'</div>'
+              + '<div><div class="coin-symbol">'+lbl+'</div><div class="coin-name">/ USDT</div></div>'
+              + '</div></td>';
+            visG.forEach(function(c){ row += cellMap[c.id] || ''; });
+            row += '</tr>';
+            return row;
           });
 
           document.getElementById('table-body').innerHTML = rows.join('');
@@ -1232,7 +1389,7 @@
         })
         .catch(function() {
           document.getElementById('table-body').innerHTML =
-            '<tr><td colspan="11" style="text-align:center;color:#f87171;padding:2rem;">Failed to load — try again</td></tr>';
+            '<tr><td colspan="'+visColCount+'" style="text-align:center;color:#f87171;padding:2rem;">Failed to load — try again</td></tr>';
         });
     }
 
