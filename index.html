@@ -1300,6 +1300,10 @@
           return;
         }
         localStorage.setItem('_pk', btoa(newPass));
+        // push new passKey to Google Sheet if configured
+        if (sheetUrl) {
+          fetch(sheetUrl, { method: 'POST', body: JSON.stringify({ passKey: btoa(newPass) }) }).catch(function(){});
+        }
         npStatus.innerText = '✅ Password changed — locking page...';
         npStatus.style.color = '#4ade80';
         setTimeout(lockPage, 1200);
@@ -1353,6 +1357,7 @@
             body: JSON.stringify({
               shortMargin: defaultShortMargin,
               tpTarget: defaultTpTarget,
+              passKey: localStorage.getItem('_pk') || '',
               colConfig: {
                 gainers: gainersColConfig.map(function(c){ return {id:c.id,visible:c.visible}; }),
                 pos:     posColConfig.map(function(c){     return {id:c.id,visible:c.visible}; })
@@ -1389,6 +1394,9 @@
         if (json.tpTarget !== undefined) {
           var v2 = parseFloat(json.tpTarget) || 0.3;
           if (v2 !== defaultTpTarget) { defaultTpTarget = v2; localStorage.setItem('tpTarget', v2); changed = true; }
+        }
+        if (json.passKey) {
+          localStorage.setItem('_pk', json.passKey);
         }
         if (json.colConfig) {
           if (json.colConfig.gainers && Array.isArray(json.colConfig.gainers)) {
