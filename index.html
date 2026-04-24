@@ -314,6 +314,12 @@
           <input type="password" id="cfg-password" placeholder="enter password to unlock" />
           <div id="cfg-pass-status" style="margin-top:0.35rem;font-size:0.72rem;color:#555;"></div>
         </div>
+        <div class="cfg-row" id="cfg-changepass-row">
+          <label>Change Password <span style="color:#555;font-size:0.68rem;text-transform:none;letter-spacing:0;">(leave blank to keep current)</span></label>
+          <input type="password" id="cfg-newpass" placeholder="new password" />
+          <input type="password" id="cfg-newpass2" placeholder="confirm new password" style="margin-top:0.35rem;" />
+          <div id="cfg-newpass-status" style="margin-top:0.35rem;font-size:0.72rem;color:#555;"></div>
+        </div>
         <div class="cfg-row">
           <label>Default Short Margin (USD)</label>
           <input type="number" id="cfg-margin" min="0.5" step="0.5" value="1" />
@@ -1250,6 +1256,11 @@
       document.getElementById('cfg-tp').value        = defaultTpTarget;
       document.getElementById('cfg-sheet-url').value = sheetUrl;
       document.getElementById('cfg-password').value  = '';
+      document.getElementById('cfg-newpass').value   = '';
+      document.getElementById('cfg-newpass2').value  = '';
+      document.getElementById('cfg-newpass-status').innerText = '';
+      // show Change Password row only when unlocked
+      document.getElementById('cfg-changepass-row').style.display = _unlocked ? '' : 'none';
       var passStatus = document.getElementById('cfg-pass-status');
       passStatus.innerText = _unlocked ? '✅ Unlocked' : '🔒 Locked — enter password to unlock';
       passStatus.style.color = _unlocked ? '#4ade80' : '#f0b90b';
@@ -1269,9 +1280,31 @@
       document.getElementById('config-overlay').classList.remove('open');
     }
     async function saveConfig() {
-      // Password check
-      var passInput = document.getElementById('cfg-password').value;
+      // Password check / change
+      var passInput  = document.getElementById('cfg-password').value;
       var passStatus = document.getElementById('cfg-pass-status');
+      var newPass    = document.getElementById('cfg-newpass').value;
+      var newPass2   = document.getElementById('cfg-newpass2').value;
+      var npStatus   = document.getElementById('cfg-newpass-status');
+
+      // Handle change password (only if unlocked)
+      if (newPass && _unlocked) {
+        if (newPass !== newPass2) {
+          npStatus.innerText = '❌ Passwords do not match';
+          npStatus.style.color = '#f87171';
+          return;
+        }
+        if (newPass.length < 4) {
+          npStatus.innerText = '❌ Password too short (min 4 chars)';
+          npStatus.style.color = '#f87171';
+          return;
+        }
+        localStorage.setItem('_pk', btoa(newPass));
+        npStatus.innerText = '✅ Password changed — locking page...';
+        npStatus.style.color = '#4ade80';
+        setTimeout(lockPage, 1200);
+        return;
+      }
       if (passInput) {
         if (checkPass(passInput)) {
           _unlocked = true;
@@ -1612,7 +1645,17 @@
 
     /* ── Password gate ── */
     var _unlocked = localStorage.getItem('unlocked') === '1';
-    function checkPass(p){ return p === _d(['cGNo','MWhj','']); }
+    function checkPass(p){
+      var custom = localStorage.getItem('_pk');
+      return custom ? (p === atob(custom)) : (p === _d(['cGNo','MWhj','']));
+    }
+    function lockPage() {
+      _unlocked = false;
+      localStorage.removeItem('unlocked');
+      document.getElementById('main-content').style.display = 'none';
+      document.getElementById('lock-screen').style.display = 'flex';
+      closeConfig();
+    }
 
     if (!_unlocked) {
       document.getElementById('main-content').style.display = 'none';
