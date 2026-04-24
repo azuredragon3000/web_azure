@@ -474,7 +474,6 @@
     var posSortCol     = 'size';
     var posSortAsc     = false; // default: high → low
     var tpInFlight     = new Set(); // symbols where autoSetTP is currently running
-    var tpLastAttempt  = {};        // symbol -> timestamp of last autoSetTP attempt
 
     var posSortKeys = {
       size:     function(p){ return Math.abs(parseFloat(p.positionAmt)); },
@@ -1082,7 +1081,6 @@
     async function autoSetTP(symbol, avgPrice, execQty) {
       if (tpInFlight.has(symbol)) { console.log('[autoSetTP] already in-flight for', symbol); return; }
       tpInFlight.add(symbol);
-      tpLastAttempt[symbol] = Date.now();
       try {
       var ei       = exInfoCache.futures && exInfoCache.futures[symbol];
       var tickSize = (ei && ei.tick && ei.tick !== '--') ? parseFloat(ei.tick) : 0.01;
@@ -1104,13 +1102,12 @@
           setShortStatus(symbol, 'FILLED', 'Filled + TP @$' + tpPrice);
           renderPositions();
         } else {
-          // Any error (including -4120) will retry after 30s cooldown
-          console.warn('[autoSetTP]', symbol, 'err', r.code, r.msg, '— will retry in 30s');
-          setShortStatus(symbol, 'FILLED', 'Filled (TP err ' + (r.code||'?') + ' — retry 30s)');
+          console.warn('[autoSetTP]', symbol, 'err', r.code, r.msg, '— will retry next poll');
+          setShortStatus(symbol, 'FILLED', 'Filled (TP err ' + (r.code||'?') + ' — retrying...)');
         }
       } catch(e) {
-        console.warn('[autoSetTP]', symbol, 'fetch err:', e.message, '— will retry in 30s');
-        setShortStatus(symbol, 'FILLED', 'Filled (TP failed — retry 30s)');
+        console.warn('[autoSetTP]', symbol, 'fetch err:', e.message, '— will retry next poll');
+        setShortStatus(symbol, 'FILLED', 'Filled (TP failed — retrying...)');
       }
       } finally { tpInFlight.delete(symbol); }
     }
