@@ -886,8 +886,7 @@
           side: side,
           positionSide: posSide,
           type: 'MARKET',
-          quantity: qtyFmt,
-          reduceOnly: 'true'
+          quantity: qtyFmt
         });
         if (r && r.code) {
           alert('Close failed: ' + (r.msg || ('code ' + r.code)));
