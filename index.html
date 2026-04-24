@@ -707,7 +707,6 @@
                 // Recover polling: pending LIMIT SELL SHORT = our short order not yet filled
                 if (o.type === 'LIMIT' && o.side === 'SELL' && o.positionSide === 'SHORT') {
                   var ss = shortStatuses[o.symbol];
-                  // Only resume if not already polling this orderId
                   if (!ss || ss.orderId !== o.orderId) {
                     shortStatuses[o.symbol] = { state: 'PENDING', msg: 'Pending #' + o.orderId, orderId: o.orderId };
                     pollOrder(o.symbol, o.orderId);
@@ -716,6 +715,20 @@
               });
             }
             renderPositions();
+            // Auto-set TP for any SHORT position that has no TP order yet
+            open.forEach(function(p) {
+              var amt = parseFloat(p.positionAmt);
+              if (amt >= 0) return; // only SHORT positions
+              if (tpMap[p.symbol]) return; // already has TP
+              var ss = shortStatuses[p.symbol];
+              if (ss && ss.state === 'PENDING') return; // short order still pending fill
+              if (p._autoTpInProgress) return; // already setting TP for this symbol
+              p._autoTpInProgress = true;
+              console.log('[Auto TP] No TP found for ' + p.symbol + ' — placing now');
+              autoSetTP(p.symbol, p.entryPrice, Math.abs(amt)).finally(function(){
+                p._autoTpInProgress = false;
+              });
+            });
           })
           .catch(function(){});
         renderPositions();
