@@ -208,6 +208,7 @@
       <span id="pos-count" style="color:#555"></span>
     </div>
     <div id="pos-error" style="display:none;max-width:1100px;margin:0 auto 1rem;padding:0.8rem 1rem;background:#2a0a0a;border:1px solid #f87171;border-radius:8px;color:#f87171;font-size:0.82rem;font-family:monospace;"></div>
+    <div class="scroll-top" id="pos-scroll-top" style="display:none;"><div class="scroll-top-inner" id="pos-scroll-top-inner"></div></div>
     <div class="pos-wrap" id="pos-wrap" style="display:none">
       <table class="pos-table">
         <thead><tr></tr></thead>
@@ -1728,6 +1729,34 @@
       // also sync after table re-renders
       var obs = new MutationObserver(syncWidth);
       obs.observe(document.getElementById('table-body'), { childList: true, subtree: true });
+    })();
+
+    /* ── Sync top/bottom scrollbars for positions table ── */
+    (function() {
+      var top   = document.getElementById('pos-scroll-top');
+      var bot   = document.getElementById('pos-wrap');
+      var inner = document.getElementById('pos-scroll-top-inner');
+      function syncWidth() {
+        var tbl = bot.querySelector('.pos-table');
+        if (tbl) inner.style.width = tbl.offsetWidth + 'px';
+      }
+      var fromTop = false, fromBot = false;
+      top.addEventListener('scroll', function() {
+        if (fromBot) { fromBot = false; return; }
+        fromTop = true;
+        bot.scrollLeft = top.scrollLeft;
+      });
+      bot.addEventListener('scroll', function() {
+        if (fromTop) { fromTop = false; return; }
+        fromBot = true;
+        top.scrollLeft = bot.scrollLeft;
+        syncWidth();
+      });
+      var obs = new MutationObserver(function() {
+        syncWidth();
+        top.style.display = bot.style.display; // keep visibility in sync
+      });
+      obs.observe(document.getElementById('pos-body'), { childList: true, subtree: true });
     })();
   </script>
 
