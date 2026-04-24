@@ -1316,8 +1316,10 @@
           document.getElementById('main-content').style.display = '';
           document.getElementById('subtabs').classList.add('show');
           document.getElementById('table-title').innerText = '🚀 Top Gainers';
+          closeConfig();
           loadRanking(); initSnapshot();
           loadPositions(); loadBalance(); loadFundingData(); loadConfigFromSheet();
+          return; // don't continue saving other fields — user just unlocked
         } else {
           passStatus.innerText = '❌ Wrong password';
           passStatus.style.color = '#f87171';
