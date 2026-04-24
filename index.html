@@ -1057,15 +1057,17 @@
       try {
       var ei       = exInfoCache.futures && exInfoCache.futures[symbol];
       var tickSize = (ei && ei.tick && ei.tick !== '--') ? parseFloat(ei.tick) : 0.01;
+      var stepSize = (ei && ei.step) ? parseFloat(ei.step) : 0.001;
       // TP price = entry - (target_pnl / qty)  → SHORT lời khi giá giảm
       var tpPrice  = parseFloat(avgPrice) - (defaultTpTarget / parseFloat(execQty));
       tpPrice = (Math.round(tpPrice / tickSize) * tickSize).toFixed(countDecimals(tickSize));
-      console.log('[autoSetTP]', symbol, 'entry:', avgPrice, 'qty:', execQty, '→ stopPrice:', tpPrice);
+      var qtyFmt   = parseFloat(execQty).toFixed(countDecimals(stepSize));
+      console.log('[autoSetTP]', symbol, 'entry:', avgPrice, 'qty:', qtyFmt, '→ stopPrice:', tpPrice);
       try {
         var r = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/order', {
           symbol: symbol, side: 'BUY', positionSide: 'SHORT',
           type: 'TAKE_PROFIT_MARKET', stopPrice: tpPrice,
-          closePosition: 'true', workingType: 'MARK_PRICE'
+          quantity: qtyFmt, workingType: 'MARK_PRICE'
         });
         console.log('[autoSetTP] response:', JSON.stringify(r));
         if (r.orderId) {
@@ -1089,8 +1091,9 @@
           return;
         }
         if (o.status === 'FILLED') {
-          setShortStatus(symbol, 'FILLED', 'Filled — setting TP...');
-          await autoSetTP(symbol, o.avgPrice, o.executedQty);
+          // Don't place TP here — qty from executedQty may have precision mismatch.
+          // loadPositions auto-TP loop will detect missing TP and place it using real positionAmt.
+          setShortStatus(symbol, 'FILLED', 'Filled — TP pending...');
           return;
         }
         if (['CANCELED','EXPIRED','REJECTED'].indexOf(o.status) !== -1) { setShortStatus(symbol, 'ERR', o.status); return; }
