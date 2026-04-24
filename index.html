@@ -169,7 +169,7 @@
     </nav>
   </header>
 
-  <main>
+  <main id="main-content">
     <!-- ── Balance Cards ── -->
     <div class="balance-section" id="balance-section" style="display:none">
       <div class="balance-title"><span>💰 Futures Account Balance</span></div>
@@ -1278,7 +1278,12 @@
           localStorage.setItem('unlocked', '1');
           passStatus.innerText = '✅ Unlocked';
           passStatus.style.color = '#4ade80';
-          // start data loading if first time
+          // show main, hide lock screen, start everything
+          document.getElementById('lock-screen').style.display = 'none';
+          document.getElementById('main-content').style.display = '';
+          document.getElementById('subtabs').classList.add('show');
+          document.getElementById('table-title').innerText = '🚀 Top Gainers';
+          loadRanking(); initSnapshot();
           loadPositions(); loadBalance(); loadFundingData(); loadConfigFromSheet();
         } else {
           passStatus.innerText = '❌ Wrong password';
@@ -1609,18 +1614,18 @@
     var _unlocked = localStorage.getItem('unlocked') === '1';
     function checkPass(p){ return p === _d(['cGNo','MWhj','']); }
 
-    document.getElementById('subtabs').classList.add('show');
-    document.getElementById('table-title').innerText = '🚀 Top Gainers';
-    loadRanking();
-    initSnapshot();
-    if (_unlocked) {
+    if (!_unlocked) {
+      document.getElementById('main-content').style.display = 'none';
+      document.getElementById('lock-screen').style.display = 'flex';
+    } else {
+      document.getElementById('subtabs').classList.add('show');
+      document.getElementById('table-title').innerText = '🚀 Top Gainers';
+      loadRanking();
+      initSnapshot();
       loadPositions();
       loadBalance();
       loadFundingData();
       loadConfigFromSheet();
-    } else {
-      // show lock notice in balance area
-      document.getElementById('balance-section').style.display = 'none';
     }
 
     /* ── Sync top/bottom scrollbars for ranking table ── */
