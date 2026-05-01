@@ -1,29 +1,28 @@
 """
 scrape_warnings.py
 ==================
-Step 1: Fetch all USDT-M perpetual futures from fapi exchangeInfo.
-Step 2: Fetch ALL spot products in ONE request via get-all-product endpoint.
-        Build se=9 map from that (avoids 600+ individual bapi calls that get geo-blocked).
-Step 3: Save results to warning_coins.json.
+Fetch ALL Binance products in ONE request via get-all-product.
+Filter USDT pairs where se=9 (Innovation Zone = warning coin).
+Upload result to warning_coins.json via GitHub API.
 
+No fapi.binance.com needed — avoids US geo-block entirely.
 Runs on GitHub Actions via .github/workflows/scrape_warnings.yml
 """
 
+import base64
 import json
+import os
 import sys
-import time
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 
 import requests
 
 SESSION = requests.Session()
 SESSION.headers.update({
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.5',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'Connection': 'keep-alive',
-    'Cache-Control': 'no-cache',
-    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
 })
 
 STABLES = {
@@ -31,7 +30,6 @@ STABLES = {
     'USDPUSDT', 'DAIUSDT', 'EURUSDT', 'GBPUSDT', 'AEURUSDT',
 }
 
-# Innovation Zone warning message (same for all se=9 coins on Binance)
 WARNING_MSG = (
     'The underlying asset is an early-stage crypto project. '
     'Relatively extreme price fluctuations may occur due to limited liquidity, '
@@ -39,180 +37,95 @@ WARNING_MSG = (
     'and exercise caution.'
 )
 
-# Try multiple endpoints + subdomains in order
-BULK_PRODUCT_URLS = [
+BULK_URLS = [
     'https://www.binance.com/exchange-api/v1/public/asset-service/product/get-all-product',
     'https://www.binance.com/bapi/asset/v2/public/asset-service/product/get-all-product',
-    'https://api4.binance.com/bapi/asset/v2/public/asset-service/product/get-all-product',
-    'https://api.binance.com/bapi/asset/v2/public/asset-service/product/get-all-product',
 ]
 
 
-def fetch_json(url: str, timeout: int = 30):
-    try:
-        r = SESSION.get(url, timeout=timeout)
-        print(f'  GET {url.split("/")[-1]} -> HTTP {r.status_code} ({len(r.content)} bytes)', flush=True)
-        if r.status_code == 200:
-            j = r.json()
-            return j
-        else:
-            print(f'    Body preview: {r.text[:200]}', flush=True)
-    except Exception as e:
-        print(f'  GET {url} -> ERROR: {e}', flush=True)
-    return None
-
-
-# ── Step 1: all USDT perps ────────────────────────────────────────────────────
-
-def get_all_perps() -> list:
-    print('Fetching fapi exchangeInfo...', flush=True)
-    for attempt in range(3):
+def fetch_all_products() -> list:
+    """Fetch all Binance products in one request. Returns raw product list."""
+    for url in BULK_URLS:
         try:
-            r = SESSION.get('https://fapi.binance.com/fapi/v1/exchangeInfo', timeout=20)
-            r.raise_for_status()
-            perps = [
-                s for s in r.json()['symbols']
-                if s.get('contractType') == 'PERPETUAL'
-                and s['symbol'].endswith('USDT')
-                and s['symbol'] not in STABLES
-            ]
-            print(f'Found {len(perps)} USDT perpetuals.', flush=True)
-            return perps
+            r = SESSION.get(url, timeout=30)
+            print(f'  {url.split("/")[-1]} -> HTTP {r.status_code} ({len(r.content):,} bytes)', flush=True)
+            if r.status_code == 200:
+                products = r.json().get('data') or []
+                if products:
+                    print(f'  Got {len(products):,} products.', flush=True)
+                    return products
+                print(f'  Empty data field.', flush=True)
+            else:
+                print(f'  Body: {r.text[:150]}', flush=True)
         except Exception as e:
-            print(f'  fapi attempt {attempt+1}/3 failed: {e}', flush=True)
-            time.sleep(3)
+            print(f'  ERROR: {e}', flush=True)
     return []
 
 
-# ── Step 2: bulk product lookup (1 request) ───────────────────────────────────
-
-def get_bulk_se_map():
-    """
-    Fetch all Binance products in one bulk request.
-    Returns dict: spot_symbol -> {'se': str, 'tags': list}
-    """
-    print('\nFetching bulk product data (1 request)...', flush=True)
-    for url in BULK_PRODUCT_URLS:
-        print(f'  Trying: {url}', flush=True)
-        data = fetch_json(url)
-        if not data:
-            continue
-        products = data.get('data') or []
-        if not isinstance(products, list) or len(products) == 0:
-            print(f'    Response keys: {list(data.keys())[:10]}', flush=True)
-            print(f'    data field type: {type(products)}, len: {len(products) if isinstance(products,list) else "N/A"}', flush=True)
-            continue
-        se_map = {}
-        for p in products:
-            sym  = p.get('s', '')       # e.g. "BRUSDT"
-            se   = str(p.get('se', '')) # e.g. "9"
-            tags = p.get('tags') or []
-            if sym:
-                se_map[sym] = {'se': se, 'tags': tags}
-        count9 = sum(1 for v in se_map.values() if v['se'] == '9')
-        print(f'    Loaded {len(se_map)} products, {count9} with se=9.', flush=True)
-        return se_map
-    print('  All bulk product endpoints failed.', flush=True)
-    return {}
-
-
-# ── Step 3: build warn map ───────────────────────────────────────────────────
-
-def build_warn_map(perps: list, se_map: dict) -> dict:
-    if not perps:
-        return {}
+def build_warning_coins(products: list) -> dict:
+    """Filter products: USDT perp symbols with se=9."""
     results = {}
-    for s in perps:
-        fsym = s['symbol']                 # e.g. "BRUSDT"
-        base = s.get('baseAsset', fsym[:-4])
-        # spot symbol: strip leading digits from base then add USDT
-        stripped = base.lstrip('0123456789')
-        spot = (stripped or base) + 'USDT'
+    for p in products:
+        sym  = p.get('s', '')        # e.g. "BRUSDT"
+        se   = str(p.get('se', ''))  # "9" = Innovation Zone
+        tags = p.get('tags') or []
+        cs   = p.get('cs', '')       # contract status / trading status
 
-        # Look up in bulk se_map using spot symbol (same as futures for USDT pairs)
-        info = se_map.get(spot) or se_map.get(fsym) or {'se': '', 'tags': []}
-        is_warn = info['se'] == '9'
-        results[fsym] = {
-            'se':   info['se'],
-            'tags': info['tags'],
-            'warn': is_warn,
-            'spot': spot,
-            'msg':  WARNING_MSG if is_warn else None,
+        if not sym.endswith('USDT'):
+            continue
+        if sym in STABLES:
+            continue
+        if se != '9':
+            continue
+
+        results[sym] = {
+            'tags': tags,
+            'msg':  WARNING_MSG,
         }
 
-    warn_count = sum(1 for v in results.values() if v['warn'])
-    no_data    = sum(1 for v in results.values() if v['se'] == '')
-    print(f'Result: {warn_count} Innovation Zone (se=9) coins, {no_data} with no se data.', flush=True)
     return results
 
 
-# ── Step 4: save JSON ─────────────────────────────────────────────────────────
-
-def save_results(warn_map: dict):
-    warn_coins = {
-        sym: {
-            'tags': info['tags'],
-            'spot': info['spot'],
-            'msg':  info['msg'],
-        }
-        for sym, info in warn_map.items()
-        if info['warn']
-    }
+def save_json(coins: dict) -> dict:
     output = {
         'updated': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
-        'count':   len(warn_coins),
-        'symbols': sorted(warn_coins.keys()),
-        'coins':   warn_coins,
+        'count':   len(coins),
+        'symbols': sorted(coins.keys()),
+        'coins':   coins,
     }
     with open('warning_coins.json', 'w') as f:
         json.dump(output, f, indent=2)
-    print(f'\nSaved {len(warn_coins)} warning coins to warning_coins.json', flush=True)
-    for sym in sorted(warn_coins):
-        tags = ', '.join(warn_coins[sym]['tags']) or '-'
-        print(f'  {sym:<18} {tags}')
+    return output
 
-
-# ── GitHub API upload (replaces git push — no conflict possible) ─────────────
 
 def upload_to_github():
-    """
-    Push warning_coins.json directly via GitHub REST API.
-    Reads GITHUB_TOKEN + GITHUB_REPOSITORY from env (set automatically by Actions).
-    No git commit/push needed — completely avoids push rejection errors.
-    """
-    import base64
-    import os
-    import urllib.request
-    import urllib.error
-
+    """Upload warning_coins.json via GitHub REST API — no git push needed."""
     token = os.environ.get('GITHUB_TOKEN')
     repo  = os.environ.get('GITHUB_REPOSITORY')
     if not token or not repo:
-        print('Not running in GitHub Actions — skipping API upload.', flush=True)
+        print('Not in GitHub Actions — skipping upload.', flush=True)
         return
 
     with open('warning_coins.json', 'rb') as f:
         content_b64 = base64.b64encode(f.read()).decode()
 
     api_url = f'https://api.github.com/repos/{repo}/contents/warning_coins.json'
-    headers = {
+    hdrs = {
         'Authorization': f'token {token}',
         'Accept':        'application/vnd.github.v3+json',
         'Content-Type':  'application/json',
     }
 
-    # Must supply current file SHA to update an existing file
     sha = None
     try:
-        req = urllib.request.Request(api_url, headers=headers)
-        res = json.loads(urllib.request.urlopen(req).read())
+        res = json.loads(urllib.request.urlopen(
+            urllib.request.Request(api_url, headers=hdrs)
+        ).read())
         sha = res.get('sha')
-        print(f'Current file sha: {sha[:7]}', flush=True)
+        print(f'  Existing sha: {sha[:7]}', flush=True)
     except urllib.error.HTTPError as e:
-        if e.code == 404:
-            print('File not in repo yet, will create it.', flush=True)
-        else:
-            print(f'Could not get file sha: HTTP {e.code}', flush=True)
+        if e.code != 404:
+            print(f'  GET sha failed: HTTP {e.code}', flush=True)
 
     payload = {
         'message': 'chore: update warning coins list [skip ci]',
@@ -222,69 +135,45 @@ def upload_to_github():
         payload['sha'] = sha
 
     try:
-        req2 = urllib.request.Request(
-            api_url,
-            data=json.dumps(payload).encode(),
-            method='PUT',
-            headers=headers,
-        )
-        res2 = json.loads(urllib.request.urlopen(req2).read())
-        commit_sha = res2.get('commit', {}).get('sha', '?')
-        print(f'Uploaded via API. Commit: {commit_sha[:7]}', flush=True)
+        res2 = json.loads(urllib.request.urlopen(urllib.request.Request(
+            api_url, data=json.dumps(payload).encode(), method='PUT', headers=hdrs,
+        )).read())
+        print(f'  Uploaded! Commit: {res2["commit"]["sha"][:7]}', flush=True)
     except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        print(f'API upload failed: HTTP {e.code} — {body[:300]}', flush=True)
+        print(f'  Upload failed: HTTP {e.code} — {e.read().decode()[:200]}', flush=True)
 
-
-# ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
     print(f'\nBinance Warning Scraper  -  {datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")}', flush=True)
-    try:
-        perps = get_all_perps()
-        if not perps:
-            print('ERROR: could not fetch any perpetual symbols.', flush=True)
-            _write_empty('fapi_failed')
-            upload_to_github()
-            sys.exit(0)
 
-        se_map = get_bulk_se_map()
-        if not se_map:
-            print('All Binance web endpoints are blocked from this GitHub Actions IP.', flush=True)
-            _write_empty('geo_blocked')
-            upload_to_github()
-            sys.exit(0)
+    print('\nFetching all Binance products...', flush=True)
+    products = fetch_all_products()
 
-        warn_map = build_warn_map(perps, se_map)
-        save_results(warn_map)
-        upload_to_github()
-        print('Done.', flush=True)
-    except Exception as e:
-        print(f'FATAL: {e}', flush=True)
-        import traceback
-        traceback.print_exc()
-        _write_empty('exception')
+    if not products:
+        print('FAILED: could not fetch products (geo-blocked?)', flush=True)
+        # Keep existing file, just update timestamp
+        try:
+            existing = json.load(open('warning_coins.json'))
+        except Exception:
+            existing = {'count': 0, 'symbols': [], 'coins': {}}
+        existing['updated'] = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        existing['scrape_status'] = 'geo_blocked'
+        json.dump(existing, open('warning_coins.json', 'w'), indent=2)
         upload_to_github()
         sys.exit(0)
 
+    coins = build_warning_coins(products)
+    output = save_json(coins)
 
-def _write_empty(reason: str):
-    """Write warning_coins.json with updated timestamp so git always has something to commit."""
-    try:
-        existing = {}
-        try:
-            with open('warning_coins.json') as f:
-                existing = json.load(f)
-        except Exception:
-            pass
-        existing['updated'] = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-        existing['scrape_status'] = reason
-        with open('warning_coins.json', 'w') as f:
-            json.dump(existing, f, indent=2)
-        print(f'Updated warning_coins.json timestamp (reason: {reason}).', flush=True)
-    except Exception as e:
-        print(f'Could not write warning_coins.json: {e}', flush=True)
+    print(f'\nFound {len(coins)} warning coins (se=9):', flush=True)
+    for sym in output['symbols']:
+        print(f'  {sym}', flush=True)
+
+    print('\nUploading to GitHub...', flush=True)
+    upload_to_github()
+    print('Done.', flush=True)
 
 
 if __name__ == '__main__':
     main()
+
