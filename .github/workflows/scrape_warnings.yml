@@ -13,23 +13,33 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
+      - name: Install Tor proxy
+        run: |
+          sudo apt-get install -y tor
+          sudo service tor start
+          sleep 10
+
       - name: Install dependencies
-        run: pip install requests
+        run: pip install "requests[socks]"
 
       - name: Run warning scraper
         run: python scrape_warnings.py
+        env:
+          HTTPS_PROXY: socks5h://127.0.0.1:9050
+          HTTP_PROXY: socks5h://127.0.0.1:9050
 
-            - name: Commit results
+      - name: Commit results
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin
-          git reset --soft origin/main
+          git pull --rebase origin main
           git add warning_coins.json
           git diff --staged --quiet || git commit -m "chore: update warning coins list [skip ci]"
           git push
