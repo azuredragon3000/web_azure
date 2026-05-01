@@ -1599,8 +1599,8 @@
               warning:   (function(){
                            var w = warnSet[t.symbol];
                            if (!w) return '<td style="text-align:center;color:#444;">-</td>';
-                           var tip = w.msg ? ' title="'+w.msg.replace(/"/g,'&quot;')+'"' : '';
-                           return '<td style="text-align:center;color:#f87171;font-weight:700;"'+tip+'>⚠ Yes</td>';
+                           var display = w.msg ? '⚠ '+w.msg.trim() : '⚠';
+                           return '<td style="text-align:center;color:#f87171;font-weight:700;">'+display+'</td>';
                          })(),
 
               short:     '<td style="text-align:center;"><button onclick="placeShort(\''+t.symbol+'\','+parseFloat(t.lastPrice)+')" '+(canShort?'':'disabled ')+'style="padding:0.15rem 0.55rem;border-radius:4px;border:1px solid #f87171;background:transparent;color:#f87171;font-size:0.72rem;cursor:pointer;'+(canShort?'':'opacity:0.35;cursor:not-allowed;')+'">Short</button></td>',
