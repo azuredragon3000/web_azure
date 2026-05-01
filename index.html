@@ -918,47 +918,52 @@
 
       if (dbgTxt) dbgTxt.innerHTML = '<span style="color:#888;">⏳ Fetching warning coins from Binance...</span>';
 
-      // 2. Fetch directly from Binance bapi (works from VN browser, not blocked)
-      fetch('https://www.binance.com/exchange-api/v1/public/asset-service/product/get-all-product', {
-        headers: { 'Accept': 'application/json' }
-      })
-      .then(function(r) { return r.ok ? r.json() : Promise.reject('HTTP ' + r.status); })
-      .then(function(d) {
-        var products = d.data || [];
-        var stables = {'USDCUSDT':1,'BUSDUSDT':1,'TUSDUSDT':1,'FDUSDUSDT':1,'USDPUSDT':1,'DAIUSDT':1};
-        var coins = {};
-        products.forEach(function(p) {
-          var sym = p.s || '';
-          if (sym.endsWith('USDT') && !stables[sym] && String(p.se) === '9') {
-            coins[sym] = { msg: WARNING_MSG, tags: p.tags || [] };
-          }
-        });
-        // Save to cache only when we got real live data
-        localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), coins: coins }));
-        applyWarnSet(coins, 'Binance live (' + products.length + ' products)', new Date().toLocaleString());
-        console.log('[warning] fetched from Binance:', Object.keys(coins).length, 'coins');
-      })
-      .catch(function(e) {
-        console.warn('[warning] Binance direct failed:', e);
-        if (dbgTxt) dbgTxt.innerHTML = '<span style="color:#f0b90b;">⚠ Binance direct: ' + e + '</span> — trying cached JSON...';
-        // 3. Fallback: load from warning_coins.json (last known good from GitHub)
-        // NOTE: do NOT cache this result into localStorage
-        fetch('https://azuredragon3000.github.io/web_azure/warning_coins.json?_=' + Date.now())
-        .then(function(r) { return r.ok ? r.json() : Promise.reject('HTTP ' + r.status); })
-        .then(function(d) {
-          if (d && d.coins && Object.keys(d.coins).length > 0) {
-            applyWarnSet(d.coins, 'cached JSON', d.updated||'');
-          } else {
-            if (dbgTxt) dbgTxt.innerHTML = '<span style="color:#f87171;">✗ Binance blocked + JSON has 0 coins</span>'
-              + ' <button onclick="localStorage.removeItem(\''+CACHE_KEY+'\');location.reload();" style="font-size:0.7rem;padding:0.1rem 0.4rem;background:transparent;border:1px solid #555;color:#555;border-radius:3px;cursor:pointer;margin-left:0.5rem;">retry</button>';
-            if (dbgDetail) dbgDetail.style.display = 'none';
-          }
-        })
-        .catch(function(e2) {
-          if (dbgTxt) dbgTxt.innerHTML = '<span style="color:#f87171;">✗ All sources failed: ' + e2 + '</span>';
+      var BINANCE_URL = 'https://www.binance.com/exchange-api/v1/public/asset-service/product/get-all-product';
+      // CORS proxies — browser sends to proxy server, proxy fetches Binance and adds CORS headers
+      // These are different from GitHub Actions: request comes from VN IP, not Azure
+      var PROXY_URLS = [
+        BINANCE_URL,  // direct (works if Binance supports CORS for this origin)
+        'https://api.allorigins.win/raw?url=' + encodeURIComponent(BINANCE_URL),
+        'https://corsproxy.io/?' + encodeURIComponent(BINANCE_URL),
+        'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(BINANCE_URL),
+      ];
+
+      function tryFetch(urls, idx) {
+        if (idx >= urls.length) {
+          if (dbgTxt) dbgTxt.innerHTML = '<span style="color:#f87171;">✗ All CORS proxies failed</span>'
+            + ' <button onclick="localStorage.removeItem(\''+CACHE_KEY+'\');location.reload();" style="font-size:0.7rem;padding:0.1rem 0.4rem;background:transparent;border:1px solid #555;color:#555;border-radius:3px;cursor:pointer;margin-left:0.5rem;">retry</button>';
           if (dbgDetail) dbgDetail.style.display = 'none';
-        });
-      });
+          return;
+        }
+        var url = urls[idx];
+        var label = idx === 0 ? 'direct' : url.split('/')[2];
+        if (dbgTxt) dbgTxt.innerHTML = '<span style="color:#888;">⏳ Trying ' + label + '...</span>';
+        fetch(url)
+          .then(function(r) { return r.ok ? r.json() : Promise.reject('HTTP ' + r.status); })
+          .then(function(d) {
+            // allorigins wraps: {"contents":"...json..."}
+            if (typeof d.contents === 'string') d = JSON.parse(d.contents);
+            var products = d.data || [];
+            if (!products.length) throw new Error('empty data');
+            var stables = {'USDCUSDT':1,'BUSDUSDT':1,'TUSDUSDT':1,'FDUSDUSDT':1,'USDPUSDT':1,'DAIUSDT':1};
+            var coins = {};
+            products.forEach(function(p) {
+              var sym = p.s || '';
+              if (sym.endsWith('USDT') && !stables[sym] && String(p.se) === '9') {
+                coins[sym] = { msg: WARNING_MSG, tags: p.tags || [] };
+              }
+            });
+            localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), coins: coins }));
+            applyWarnSet(coins, label + ' (' + products.length + ' products)', new Date().toLocaleString());
+            console.log('[warning] OK via', label, ':', Object.keys(coins).length, 'coins');
+          })
+          .catch(function(e) {
+            console.warn('[warning]', label, 'failed:', e);
+            tryFetch(urls, idx + 1);
+          });
+      }
+
+      tryFetch(PROXY_URLS, 0);
     })();
 
     var tpMap                   = {}; // symbol -> true if TP order exists
