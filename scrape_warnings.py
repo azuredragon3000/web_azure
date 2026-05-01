@@ -46,23 +46,47 @@ BULK_URLS = [
     'https://www.binance.com/bapi/asset/v2/public/asset-service/product/get-all-product',
 ]
 
+# Free relay services — request goes through their servers (not GitHub/Azure IP)
+# Used as fallback when direct access is blocked
+RELAY_PREFIXES = [
+    'https://api.allorigins.win/raw?url=',
+    'https://corsproxy.io/?url=',
+    'https://api.codetabs.com/v1/proxy?quest=',
+]
+
 
 def fetch_all_products() -> list:
-    """Fetch all Binance products in one request. Returns raw product list."""
-    for url in BULK_URLS:
+    """Fetch all Binance products. Tries direct first, then relay services."""
+    import urllib.parse
+
+    targets = [
+        # Direct
+        ('direct', BULK_URLS[0]),
+        ('direct', BULK_URLS[1]),
+    ]
+    # Add relay combinations as fallback
+    for relay in RELAY_PREFIXES:
+        for base in BULK_URLS:
+            targets.append(('relay:' + relay.split('/')[2], relay + urllib.parse.quote(base, safe='')))
+
+    for label, url in targets:
         try:
             r = SESSION.get(url, timeout=30)
-            print(f'  {url.split("/")[-1]} -> HTTP {r.status_code} ({len(r.content):,} bytes)', flush=True)
-            if r.status_code == 200:
-                products = r.json().get('data') or []
-                if products:
-                    print(f'  Got {len(products):,} products.', flush=True)
-                    return products
-                print(f'  Empty data field.', flush=True)
-            else:
-                print(f'  Body: {r.text[:150]}', flush=True)
+            print(f'  [{label}] HTTP {r.status_code} ({len(r.content):,} bytes)', flush=True)
+            if r.status_code != 200:
+                print(f'    Body: {r.text[:120]}', flush=True)
+                continue
+            data = r.json()
+            # allorigins wraps response in {"contents": "..."}
+            if 'contents' in data:
+                data = json.loads(data['contents'])
+            products = data.get('data') or []
+            if products:
+                print(f'  Got {len(products):,} products via [{label}].', flush=True)
+                return products
+            print(f'  Empty data.', flush=True)
         except Exception as e:
-            print(f'  ERROR: {e}', flush=True)
+            print(f'  [{label}] ERROR: {e}', flush=True)
     return []
 
 
