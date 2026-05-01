@@ -172,6 +172,70 @@ def save_results(warn_map: dict):
         print(f'  {sym:<18} {tags}')
 
 
+# ── GitHub API upload (replaces git push — no conflict possible) ─────────────
+
+def upload_to_github():
+    """
+    Push warning_coins.json directly via GitHub REST API.
+    Reads GITHUB_TOKEN + GITHUB_REPOSITORY from env (set automatically by Actions).
+    No git commit/push needed — completely avoids push rejection errors.
+    """
+    import base64
+    import os
+    import urllib.request
+    import urllib.error
+
+    token = os.environ.get('GITHUB_TOKEN')
+    repo  = os.environ.get('GITHUB_REPOSITORY')
+    if not token or not repo:
+        print('Not running in GitHub Actions — skipping API upload.', flush=True)
+        return
+
+    with open('warning_coins.json', 'rb') as f:
+        content_b64 = base64.b64encode(f.read()).decode()
+
+    api_url = f'https://api.github.com/repos/{repo}/contents/warning_coins.json'
+    headers = {
+        'Authorization': f'token {token}',
+        'Accept':        'application/vnd.github.v3+json',
+        'Content-Type':  'application/json',
+    }
+
+    # Must supply current file SHA to update an existing file
+    sha = None
+    try:
+        req = urllib.request.Request(api_url, headers=headers)
+        res = json.loads(urllib.request.urlopen(req).read())
+        sha = res.get('sha')
+        print(f'Current file sha: {sha[:7]}', flush=True)
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            print('File not in repo yet, will create it.', flush=True)
+        else:
+            print(f'Could not get file sha: HTTP {e.code}', flush=True)
+
+    payload = {
+        'message': 'chore: update warning coins list [skip ci]',
+        'content': content_b64,
+    }
+    if sha:
+        payload['sha'] = sha
+
+    try:
+        req2 = urllib.request.Request(
+            api_url,
+            data=json.dumps(payload).encode(),
+            method='PUT',
+            headers=headers,
+        )
+        res2 = json.loads(urllib.request.urlopen(req2).read())
+        commit_sha = res2.get('commit', {}).get('sha', '?')
+        print(f'Uploaded via API. Commit: {commit_sha[:7]}', flush=True)
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        print(f'API upload failed: HTTP {e.code} — {body[:300]}', flush=True)
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
@@ -181,24 +245,26 @@ def main():
         if not perps:
             print('ERROR: could not fetch any perpetual symbols.', flush=True)
             _write_empty('fapi_failed')
+            upload_to_github()
             sys.exit(0)
 
         se_map = get_bulk_se_map()
         if not se_map:
             print('All Binance web endpoints are blocked from this GitHub Actions IP.', flush=True)
-            print('Keeping existing warning_coins.json (will retry next scheduled run).', flush=True)
-            # Touch the file with a new timestamp so git sees a change and can commit
             _write_empty('geo_blocked')
+            upload_to_github()
             sys.exit(0)
 
         warn_map = build_warn_map(perps, se_map)
         save_results(warn_map)
+        upload_to_github()
         print('Done.', flush=True)
     except Exception as e:
         print(f'FATAL: {e}', flush=True)
         import traceback
         traceback.print_exc()
         _write_empty('exception')
+        upload_to_github()
         sys.exit(0)
 
 
