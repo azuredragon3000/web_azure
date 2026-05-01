@@ -18,7 +18,11 @@ import requests
 
 SESSION = requests.Session()
 SESSION.headers.update({
-    'Accept': 'application/json',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+    'Cache-Control': 'no-cache',
     'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 })
 
@@ -35,19 +39,24 @@ WARNING_MSG = (
     'and exercise caution.'
 )
 
-# Bulk product endpoint — returns ALL products in ONE call with se field
+# Try multiple endpoints + subdomains in order
 BULK_PRODUCT_URLS = [
     'https://www.binance.com/exchange-api/v1/public/asset-service/product/get-all-product',
     'https://www.binance.com/bapi/asset/v2/public/asset-service/product/get-all-product',
+    'https://api4.binance.com/bapi/asset/v2/public/asset-service/product/get-all-product',
+    'https://api.binance.com/bapi/asset/v2/public/asset-service/product/get-all-product',
 ]
 
 
-def fetch_json(url: str, timeout: int = 30) -> dict | None:
+def fetch_json(url: str, timeout: int = 30):
     try:
         r = SESSION.get(url, timeout=timeout)
-        print(f'  GET {url} -> HTTP {r.status_code}', flush=True)
+        print(f'  GET {url.split("/")[-1]} -> HTTP {r.status_code} ({len(r.content)} bytes)', flush=True)
         if r.status_code == 200:
-            return r.json()
+            j = r.json()
+            return j
+        else:
+            print(f'    Body preview: {r.text[:200]}', flush=True)
     except Exception as e:
         print(f'  GET {url} -> ERROR: {e}', flush=True)
     return None
@@ -77,30 +86,31 @@ def get_all_perps() -> list:
 
 # ── Step 2: bulk product lookup (1 request) ───────────────────────────────────
 
-def get_bulk_se_map() -> dict:
+def get_bulk_se_map():
     """
     Fetch all Binance products in one bulk request.
     Returns dict: spot_symbol -> {'se': str, 'tags': list}
-    e.g. {'BRUSDT': {'se': '9', 'tags': ['innovation-zone']}, ...}
     """
     print('\nFetching bulk product data (1 request)...', flush=True)
     for url in BULK_PRODUCT_URLS:
+        print(f'  Trying: {url}', flush=True)
         data = fetch_json(url)
         if not data:
             continue
-        # Response has 'data' list with product objects
         products = data.get('data') or []
-        if not products:
-            print(f'  No products in response from {url}', flush=True)
+        if not isinstance(products, list) or len(products) == 0:
+            print(f'    Response keys: {list(data.keys())[:10]}', flush=True)
+            print(f'    data field type: {type(products)}, len: {len(products) if isinstance(products,list) else "N/A"}', flush=True)
             continue
         se_map = {}
         for p in products:
-            sym = p.get('s', '')           # e.g. "BRUSDT"
-            se  = str(p.get('se', ''))     # e.g. "9" or "521"
+            sym  = p.get('s', '')       # e.g. "BRUSDT"
+            se   = str(p.get('se', '')) # e.g. "9"
             tags = p.get('tags') or []
             if sym:
                 se_map[sym] = {'se': se, 'tags': tags}
-        print(f'  Loaded {len(se_map)} products from {url}', flush=True)
+        count9 = sum(1 for v in se_map.values() if v['se'] == '9')
+        print(f'    Loaded {len(se_map)} products, {count9} with se=9.', flush=True)
         return se_map
     print('  All bulk product endpoints failed.', flush=True)
     return {}
@@ -170,12 +180,15 @@ def main():
         perps = get_all_perps()
         if not perps:
             print('ERROR: could not fetch any perpetual symbols.', flush=True)
+            _write_empty('fapi_failed')
             sys.exit(0)
 
         se_map = get_bulk_se_map()
         if not se_map:
-            print('ERROR: could not fetch product data (all bulk endpoints failed).', flush=True)
-            print('Binance may be geo-blocking this GitHub Actions IP.', flush=True)
+            print('All Binance web endpoints are blocked from this GitHub Actions IP.', flush=True)
+            print('Keeping existing warning_coins.json (will retry next scheduled run).', flush=True)
+            # Touch the file with a new timestamp so git sees a change and can commit
+            _write_empty('geo_blocked')
             sys.exit(0)
 
         warn_map = build_warn_map(perps, se_map)
@@ -185,7 +198,26 @@ def main():
         print(f'FATAL: {e}', flush=True)
         import traceback
         traceback.print_exc()
+        _write_empty('exception')
         sys.exit(0)
+
+
+def _write_empty(reason: str):
+    """Write warning_coins.json with updated timestamp so git always has something to commit."""
+    try:
+        existing = {}
+        try:
+            with open('warning_coins.json') as f:
+                existing = json.load(f)
+        except Exception:
+            pass
+        existing['updated'] = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        existing['scrape_status'] = reason
+        with open('warning_coins.json', 'w') as f:
+            json.dump(existing, f, indent=2)
+        print(f'Updated warning_coins.json timestamp (reason: {reason}).', flush=True)
+    except Exception as e:
+        print(f'Could not write warning_coins.json: {e}', flush=True)
 
 
 if __name__ == '__main__':
