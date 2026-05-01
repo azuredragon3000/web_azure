@@ -1,8 +1,8 @@
 {
-  "updated": "2026-05-01T05:49:37Z",
+  "updated": "2026-05-01T05:55:30Z",
   "count": 0,
   "symbols": [],
   "coins": {},
   "_note": "Placeholder \u2014 will be populated by GitHub Actions scraper",
-  "scrape_status": "fapi_failed"
+  "scrape_status": "geo_blocked"
 }
