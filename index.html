@@ -243,6 +243,15 @@
       <span class="update-time" id="update-time">Connecting...</span>
     </div>
 
+    <!-- Warning debug banner -->
+    <div id="warn-debug" style="max-width:1100px;margin:0.4rem auto 0.2rem;padding:0.5rem 0.9rem;border-radius:7px;font-size:0.78rem;font-family:monospace;background:#1a1a1a;border:1px solid #333;color:#888;display:none;">
+      <span id="warn-debug-text">⏳ Loading warning_coins.json...</span>
+      <details id="warn-debug-detail" style="display:inline;margin-left:0.8rem;">
+        <summary style="display:inline;cursor:pointer;color:#555;">show coins</summary>
+        <div id="warn-debug-list" style="margin-top:0.4rem;line-height:1.8;"></div>
+      </details>
+    </div>
+
     <div class="tabs">
       <button class="tab-btn active" onclick="switchTab('gainers',this)">🚀 Gainers</button>
       <button class="tab-btn" onclick="switchTab('losers',this)">📉 Losers</button>
@@ -873,15 +882,40 @@
     var warnSet = {};   // { BTCUSDT: {msg:'...'}, ... }
     (function fetchWarnSet() {
       var url = 'https://azuredragon3000.github.io/web_azure/warning_coins.json';
+      var dbg = document.getElementById('warn-debug');
+      var dbgTxt = document.getElementById('warn-debug-text');
+      var dbgList = document.getElementById('warn-debug-list');
+      var dbgDetail = document.getElementById('warn-debug-detail');
+      if (dbg) dbg.style.display = 'block';
       fetch(url + '?_=' + Date.now())
-        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(r){
+          if (!r.ok) throw new Error('HTTP ' + r.status + ' — file not found (scraper not run yet?)');
+          return r.json();
+        })
         .then(function(d){
           if (d && d.coins) {
             warnSet = d.coins;
+            var syms = Object.keys(d.coins).sort();
             console.log('[warning] loaded ' + (d.count||0) + ' warning coins (updated: ' + (d.updated||'?') + ')');
+            if (dbgTxt) dbgTxt.innerHTML =
+              '<span style="color:#4ade80;">✓ warning_coins.json loaded</span>'
+              + ' &nbsp;|&nbsp; <span style="color:#f0b90b;">' + (d.count||0) + ' warning coins</span>'
+              + ' &nbsp;|&nbsp; updated: <span style="color:#aaa;">' + (d.updated||'?') + '</span>';
+            if (dbgList) dbgList.innerHTML = syms.length
+              ? syms.map(function(s){ return '<span style="color:#f87171;margin-right:0.7rem;">⚠ '+s+'</span>'; }).join('')
+              : '<span style="color:#555;">none</span>';
+            if (!syms.length && dbgDetail) dbgDetail.style.display = 'none';
+          } else {
+            if (dbgTxt) dbgTxt.innerHTML = '<span style="color:#f87171;">⚠ warning_coins.json returned empty / unexpected format</span>';
+            if (dbgDetail) dbgDetail.style.display = 'none';
           }
         })
-        .catch(function(e){ console.warn('[warning] could not load warning_coins.json:', e); });
+        .catch(function(e){
+          console.warn('[warning] could not load warning_coins.json:', e);
+          if (dbgTxt) dbgTxt.innerHTML = '<span style="color:#f87171;">✗ ' + e.message + '</span>'
+            + ' <span style="color:#555;"> — warning_coins.json does not exist yet. Run GitHub Actions workflow first.</span>';
+          if (dbgDetail) dbgDetail.style.display = 'none';
+        });
     })();
 
     var tpMap                   = {}; // symbol -> true if TP order exists
