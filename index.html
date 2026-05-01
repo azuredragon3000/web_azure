@@ -878,44 +878,84 @@
     var gainersColConfig = loadColConfig('gainersColConfig', GAINERS_COLS_DEFAULT);
     var posColConfig     = loadColConfig('posColConfig',     POS_COLS_DEFAULT);
 
-    // Warning coins from GitHub Actions scraper — fetched once at page load
-    var warnSet = {};   // { BTCUSDT: {msg:'...'}, ... }
+    // Warning coins — fetch directly from Binance bapi (browser in VN is not blocked)
+    // Cache in localStorage for 24h to avoid fetching every page load
+    var warnSet = {};
     (function fetchWarnSet() {
-      var url = 'https://azuredragon3000.github.io/web_azure/warning_coins.json';
-      var dbg = document.getElementById('warn-debug');
-      var dbgTxt = document.getElementById('warn-debug-text');
+      var dbg     = document.getElementById('warn-debug');
+      var dbgTxt  = document.getElementById('warn-debug-text');
       var dbgList = document.getElementById('warn-debug-list');
       var dbgDetail = document.getElementById('warn-debug-detail');
       if (dbg) dbg.style.display = 'block';
-      fetch(url + '?_=' + Date.now())
-        .then(function(r){
-          if (!r.ok) throw new Error('HTTP ' + r.status + ' — file not found (scraper not run yet?)');
-          return r.json();
-        })
-        .then(function(d){
+
+      var CACHE_KEY = 'warnSetCache';
+      var CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+      var WARNING_MSG = 'The underlying asset is an early-stage crypto project. Relatively extreme price fluctuations may occur due to limited liquidity, market dynamics and tokenomics.';
+
+      function applyWarnSet(coins, source, updated) {
+        warnSet = coins;
+        var syms = Object.keys(coins).sort();
+        if (dbgTxt) dbgTxt.innerHTML =
+          '<span style="color:#4ade80;">✓ ' + syms.length + ' warning coins</span>'
+          + ' &nbsp;|&nbsp; <span style="color:#555;">via ' + source + '</span>'
+          + ' &nbsp;|&nbsp; <span style="color:#666;">' + (updated||'') + '</span>'
+          + ' &nbsp;<button onclick="localStorage.removeItem(\''+CACHE_KEY+'\');location.reload();" style="font-size:0.7rem;padding:0.1rem 0.4rem;background:transparent;border:1px solid #555;color:#555;border-radius:3px;cursor:pointer;">refresh</button>';
+        if (dbgList) dbgList.innerHTML = syms.length
+          ? syms.map(function(s){ return '<span style="color:#f87171;margin-right:0.7rem;">⚠ '+s+'</span>'; }).join('')
+          : '<span style="color:#555;">none</span>';
+        if (!syms.length && dbgDetail) dbgDetail.style.display = 'none';
+      }
+
+      // 1. Try localStorage cache first
+      try {
+        var cached = JSON.parse(localStorage.getItem(CACHE_KEY));
+        if (cached && cached.ts && (Date.now() - cached.ts) < CACHE_TTL && cached.coins) {
+          applyWarnSet(cached.coins, 'cache', new Date(cached.ts).toLocaleString());
+          console.log('[warning] loaded from cache:', Object.keys(cached.coins).length, 'coins');
+          return;
+        }
+      } catch(e) {}
+
+      if (dbgTxt) dbgTxt.innerHTML = '<span style="color:#888;">⏳ Fetching warning coins from Binance...</span>';
+
+      // 2. Fetch directly from Binance bapi (works from VN browser, not blocked)
+      fetch('https://www.binance.com/exchange-api/v1/public/asset-service/product/get-all-product', {
+        headers: { 'Accept': 'application/json' }
+      })
+      .then(function(r) { return r.ok ? r.json() : Promise.reject('HTTP ' + r.status); })
+      .then(function(d) {
+        var products = d.data || [];
+        var stables = {'USDCUSDT':1,'BUSDUSDT':1,'TUSDUSDT':1,'FDUSDUSDT':1,'USDPUSDT':1,'DAIUSDT':1};
+        var coins = {};
+        products.forEach(function(p) {
+          var sym = p.s || '';
+          if (sym.endsWith('USDT') && !stables[sym] && String(p.se) === '9') {
+            coins[sym] = { msg: WARNING_MSG, tags: p.tags || [] };
+          }
+        });
+        // Save to cache
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), coins: coins }));
+        applyWarnSet(coins, 'Binance direct', new Date().toLocaleString());
+        console.log('[warning] fetched from Binance:', Object.keys(coins).length, 'coins');
+      })
+      .catch(function(e) {
+        console.warn('[warning] Binance direct failed:', e);
+        // 3. Fallback: load from warning_coins.json (last known good from GitHub)
+        fetch('https://azuredragon3000.github.io/web_azure/warning_coins.json?_=' + Date.now())
+        .then(function(r) { return r.ok ? r.json() : Promise.reject('HTTP ' + r.status); })
+        .then(function(d) {
           if (d && d.coins) {
-            warnSet = d.coins;
-            var syms = Object.keys(d.coins).sort();
-            console.log('[warning] loaded ' + (d.count||0) + ' warning coins (updated: ' + (d.updated||'?') + ')');
-            if (dbgTxt) dbgTxt.innerHTML =
-              '<span style="color:#4ade80;">✓ warning_coins.json loaded</span>'
-              + ' &nbsp;|&nbsp; <span style="color:#f0b90b;">' + (d.count||0) + ' warning coins</span>'
-              + ' &nbsp;|&nbsp; updated: <span style="color:#aaa;">' + (d.updated||'?') + '</span>';
-            if (dbgList) dbgList.innerHTML = syms.length
-              ? syms.map(function(s){ return '<span style="color:#f87171;margin-right:0.7rem;">⚠ '+s+'</span>'; }).join('')
-              : '<span style="color:#555;">none</span>';
-            if (!syms.length && dbgDetail) dbgDetail.style.display = 'none';
+            applyWarnSet(d.coins, 'cached JSON', d.updated||'');
           } else {
-            if (dbgTxt) dbgTxt.innerHTML = '<span style="color:#f87171;">⚠ warning_coins.json returned empty / unexpected format</span>';
+            if (dbgTxt) dbgTxt.innerHTML = '<span style="color:#f87171;">✗ could not load warning data</span>';
             if (dbgDetail) dbgDetail.style.display = 'none';
           }
         })
-        .catch(function(e){
-          console.warn('[warning] could not load warning_coins.json:', e);
-          if (dbgTxt) dbgTxt.innerHTML = '<span style="color:#f87171;">✗ ' + e.message + '</span>'
-            + ' <span style="color:#555;"> — warning_coins.json does not exist yet. Run GitHub Actions workflow first.</span>';
+        .catch(function() {
+          if (dbgTxt) dbgTxt.innerHTML = '<span style="color:#f87171;">✗ could not load warning data</span>';
           if (dbgDetail) dbgDetail.style.display = 'none';
         });
+      });
     })();
 
     var tpMap                   = {}; // symbol -> true if TP order exists
