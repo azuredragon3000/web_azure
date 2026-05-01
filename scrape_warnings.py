@@ -2,17 +2,16 @@
 scrape_warnings.py
 ==================
 Step 1: Fetch all USDT-M perpetual futures from fapi exchangeInfo.
-Step 2: For each symbol check bapi se=9 (Innovation Zone = warning coin).
+Step 2: Fetch ALL spot products in ONE request via get-all-product endpoint.
+        Build se=9 map from that (avoids 600+ individual bapi calls that get geo-blocked).
 Step 3: Save results to warning_coins.json.
 
-No browser / Playwright needed - bapi check is accurate and fast.
 Runs on GitHub Actions via .github/workflows/scrape_warnings.yml
 """
 
 import json
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 import requests
@@ -36,35 +35,22 @@ WARNING_MSG = (
     'and exercise caution.'
 )
 
+# Bulk product endpoint — returns ALL products in ONE call with se field
+BULK_PRODUCT_URLS = [
+    'https://www.binance.com/exchange-api/v1/public/asset-service/product/get-all-product',
+    'https://www.binance.com/bapi/asset/v2/public/asset-service/product/get-all-product',
+]
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
 
-def futures_sym_to_spot(sym: str, base: str) -> str:
-    stripped = base.lstrip('0123456789')
-    return (stripped or base) + 'USDT'
-
-
-def get_bapi_info(spot: str) -> dict:
-    """Check bapi for se field. Retries once on failure."""
-    for attempt in range(2):
-        try:
-            r = SESSION.get(
-                'https://www.binance.com/bapi/asset/v2/public'
-                '/asset-service/product/get-product-by-symbol?symbol=' + spot,
-                timeout=10
-            )
-            if r.status_code == 200:
-                d = r.json().get('data') or {}
-                return {'se': str(d.get('se', '')), 'tags': d.get('tags', [])}
-            elif r.status_code == 451:
-                # Binance geo-blocks this IP (common on GitHub Actions)
-                print(f'  [bapi] HTTP 451 geo-block on {spot} - Binance blocking this IP region', flush=True)
-                return {'se': 'blocked', 'tags': []}
-        except Exception as e:
-            if attempt == 1:
-                print(f'  [bapi] failed {spot}: {e}', flush=True)
-            time.sleep(0.5)
-    return {'se': '', 'tags': []}
+def fetch_json(url: str, timeout: int = 30) -> dict | None:
+    try:
+        r = SESSION.get(url, timeout=timeout)
+        print(f'  GET {url} -> HTTP {r.status_code}', flush=True)
+        if r.status_code == 200:
+            return r.json()
+    except Exception as e:
+        print(f'  GET {url} -> ERROR: {e}', flush=True)
+    return None
 
 
 # ── Step 1: all USDT perps ────────────────────────────────────────────────────
@@ -89,42 +75,64 @@ def get_all_perps() -> list:
     return []
 
 
-# ── Step 2: bapi check ───────────────────────────────────────────────────────
+# ── Step 2: bulk product lookup (1 request) ───────────────────────────────────
 
-def build_warn_map(perps: list) -> dict:
+def get_bulk_se_map() -> dict:
+    """
+    Fetch all Binance products in one bulk request.
+    Returns dict: spot_symbol -> {'se': str, 'tags': list}
+    e.g. {'BRUSDT': {'se': '9', 'tags': ['innovation-zone']}, ...}
+    """
+    print('\nFetching bulk product data (1 request)...', flush=True)
+    for url in BULK_PRODUCT_URLS:
+        data = fetch_json(url)
+        if not data:
+            continue
+        # Response has 'data' list with product objects
+        products = data.get('data') or []
+        if not products:
+            print(f'  No products in response from {url}', flush=True)
+            continue
+        se_map = {}
+        for p in products:
+            sym = p.get('s', '')           # e.g. "BRUSDT"
+            se  = str(p.get('se', ''))     # e.g. "9" or "521"
+            tags = p.get('tags') or []
+            if sym:
+                se_map[sym] = {'se': se, 'tags': tags}
+        print(f'  Loaded {len(se_map)} products from {url}', flush=True)
+        return se_map
+    print('  All bulk product endpoints failed.', flush=True)
+    return {}
+
+
+# ── Step 3: build warn map ───────────────────────────────────────────────────
+
+def build_warn_map(perps: list, se_map: dict) -> dict:
     if not perps:
         return {}
-    pairs = [
-        (s['symbol'], futures_sym_to_spot(s['symbol'], s.get('baseAsset', s['symbol'][:-4])))
-        for s in perps
-    ]
-    print(f'Checking bapi for {len(pairs)} symbols (20 concurrent)...', flush=True)
     results = {}
-    blocked_count = 0
-    with ThreadPoolExecutor(max_workers=20) as pool:
-        fmap = {pool.submit(get_bapi_info, spot): (fsym, spot) for fsym, spot in pairs}
-        done = 0
-        for f in as_completed(fmap):
-            fsym, spot = fmap[f]
-            info = f.result()
-            if info['se'] == 'blocked':
-                blocked_count += 1
-            is_warn = info['se'] == '9'
-            results[fsym] = {
-                'se':   info['se'],
-                'tags': info['tags'],
-                'warn': is_warn,
-                'spot': spot,
-                'msg':  WARNING_MSG if is_warn else None,
-            }
-            done += 1
-            if done % 100 == 0:
-                print(f'  ...{done}/{len(pairs)}', flush=True)
+    for s in perps:
+        fsym = s['symbol']                 # e.g. "BRUSDT"
+        base = s.get('baseAsset', fsym[:-4])
+        # spot symbol: strip leading digits from base then add USDT
+        stripped = base.lstrip('0123456789')
+        spot = (stripped or base) + 'USDT'
+
+        # Look up in bulk se_map using spot symbol (same as futures for USDT pairs)
+        info = se_map.get(spot) or se_map.get(fsym) or {'se': '', 'tags': []}
+        is_warn = info['se'] == '9'
+        results[fsym] = {
+            'se':   info['se'],
+            'tags': info['tags'],
+            'warn': is_warn,
+            'spot': spot,
+            'msg':  WARNING_MSG if is_warn else None,
+        }
+
     warn_count = sum(1 for v in results.values() if v['warn'])
-    if blocked_count > 10:
-        print(f'WARNING: {blocked_count} symbols were geo-blocked by Binance bapi.', flush=True)
-        print('  Consider using a proxy or alternative data source.', flush=True)
-    print(f'bapi done - {warn_count} Innovation Zone coins found.', flush=True)
+    no_data    = sum(1 for v in results.values() if v['se'] == '')
+    print(f'Result: {warn_count} Innovation Zone (se=9) coins, {no_data} with no se data.', flush=True)
     return results
 
 
@@ -161,17 +169,22 @@ def main():
     try:
         perps = get_all_perps()
         if not perps:
-            print('ERROR: could not fetch any perpetual symbols (network blocked?)', flush=True)
-            # Keep existing warning_coins.json unchanged, exit 0 so workflow doesn't fail
+            print('ERROR: could not fetch any perpetual symbols.', flush=True)
             sys.exit(0)
-        warn_map = build_warn_map(perps)
+
+        se_map = get_bulk_se_map()
+        if not se_map:
+            print('ERROR: could not fetch product data (all bulk endpoints failed).', flush=True)
+            print('Binance may be geo-blocking this GitHub Actions IP.', flush=True)
+            sys.exit(0)
+
+        warn_map = build_warn_map(perps, se_map)
         save_results(warn_map)
         print('Done.', flush=True)
     except Exception as e:
         print(f'FATAL: {e}', flush=True)
         import traceback
         traceback.print_exc()
-        # Exit 0 so the workflow doesn't fail and leave warning_coins.json broken
         sys.exit(0)
 
 
