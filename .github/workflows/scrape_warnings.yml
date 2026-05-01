@@ -19,7 +19,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install requests
+        run: pip install cloudscraper
 
       - name: Run warning scraper
         run: python scrape_warnings.py
