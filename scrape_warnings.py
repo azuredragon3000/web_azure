@@ -25,6 +25,12 @@ SESSION.headers.update({
     'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
 })
 
+# Use Tor/SOCKS proxy if available (set via HTTP_PROXY env in GitHub Actions)
+_proxy = os.environ.get('HTTP_PROXY') or os.environ.get('HTTPS_PROXY')
+if _proxy:
+    SESSION.proxies.update({'http': _proxy, 'https': _proxy})
+    print(f'Using proxy: {_proxy}', flush=True)
+
 STABLES = {
     'USDCUSDT', 'BUSDUSDT', 'TUSDUSDT', 'FDUSDUSDT',
     'USDPUSDT', 'DAIUSDT', 'EURUSDT', 'GBPUSDT', 'AEURUSDT',
