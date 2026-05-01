@@ -933,26 +933,29 @@
             coins[sym] = { msg: WARNING_MSG, tags: p.tags || [] };
           }
         });
-        // Save to cache
+        // Save to cache only when we got real live data
         localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), coins: coins }));
-        applyWarnSet(coins, 'Binance direct', new Date().toLocaleString());
+        applyWarnSet(coins, 'Binance live (' + products.length + ' products)', new Date().toLocaleString());
         console.log('[warning] fetched from Binance:', Object.keys(coins).length, 'coins');
       })
       .catch(function(e) {
         console.warn('[warning] Binance direct failed:', e);
+        if (dbgTxt) dbgTxt.innerHTML = '<span style="color:#f0b90b;">⚠ Binance direct: ' + e + '</span> — trying cached JSON...';
         // 3. Fallback: load from warning_coins.json (last known good from GitHub)
+        // NOTE: do NOT cache this result into localStorage
         fetch('https://azuredragon3000.github.io/web_azure/warning_coins.json?_=' + Date.now())
         .then(function(r) { return r.ok ? r.json() : Promise.reject('HTTP ' + r.status); })
         .then(function(d) {
-          if (d && d.coins) {
+          if (d && d.coins && Object.keys(d.coins).length > 0) {
             applyWarnSet(d.coins, 'cached JSON', d.updated||'');
           } else {
-            if (dbgTxt) dbgTxt.innerHTML = '<span style="color:#f87171;">✗ could not load warning data</span>';
+            if (dbgTxt) dbgTxt.innerHTML = '<span style="color:#f87171;">✗ Binance blocked + JSON has 0 coins</span>'
+              + ' <button onclick="localStorage.removeItem(\''+CACHE_KEY+'\');location.reload();" style="font-size:0.7rem;padding:0.1rem 0.4rem;background:transparent;border:1px solid #555;color:#555;border-radius:3px;cursor:pointer;margin-left:0.5rem;">retry</button>';
             if (dbgDetail) dbgDetail.style.display = 'none';
           }
         })
-        .catch(function() {
-          if (dbgTxt) dbgTxt.innerHTML = '<span style="color:#f87171;">✗ could not load warning data</span>';
+        .catch(function(e2) {
+          if (dbgTxt) dbgTxt.innerHTML = '<span style="color:#f87171;">✗ All sources failed: ' + e2 + '</span>';
           if (dbgDetail) dbgDetail.style.display = 'none';
         });
       });
