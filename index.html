@@ -830,6 +830,7 @@
       { id:'minN',      label:'Min Notional',  visible:true },
       { id:'taker',     label:'Taker Fee',     visible:true },
       { id:'maker',     label:'Maker Fee',     visible:true },
+      { id:'warning',   label:'Warning',       visible:true },
       { id:'futurePos', label:'Future Pos',    visible:true },
       { id:'short',     label:'Short',         visible:true, always:true },
       { id:'status',    label:'Status',        visible:true }
@@ -867,6 +868,22 @@
     }
     var gainersColConfig = loadColConfig('gainersColConfig', GAINERS_COLS_DEFAULT);
     var posColConfig     = loadColConfig('posColConfig',     POS_COLS_DEFAULT);
+
+    // Warning coins from GitHub Actions scraper — fetched once at page load
+    var warnSet = {};   // { BTCUSDT: {msg:'...'}, ... }
+    (function fetchWarnSet() {
+      var url = 'https://azuredragon3000.github.io/web_azure/warning_coins.json';
+      fetch(url + '?_=' + Date.now())
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(d){
+          if (d && d.coins) {
+            warnSet = d.coins;
+            console.log('[warning] loaded ' + (d.count||0) + ' warning coins (updated: ' + (d.updated||'?') + ')');
+          }
+        })
+        .catch(function(e){ console.warn('[warning] could not load warning_coins.json:', e); });
+    })();
+
     var tpMap                   = {}; // symbol -> true if TP order exists
     var fundingMap              = {}; // symbol -> { rate, intervalHours }
     var posOpenTimeMap          = {}; // symbol -> open timestamp (ms), fetched once per session
@@ -1545,6 +1562,13 @@
               taker:     '<td class="fee">'+ei.taker+'</td>',
               maker:     '<td class="fee">'+ei.maker+'</td>',
               futurePos: '<td style="text-align:center;font-weight:700;color:'+(hasPos?'#4ade80':'#444')+';">'+(hasPos?'YES':'')+'</td>',
+
+              warning:   (function(){
+                           var w = warnSet[t.symbol];
+                           if (!w) return '<td style="text-align:center;color:#444;">-</td>';
+                           var tip = w.msg ? ' title="'+w.msg.replace(/"/g,'&quot;')+'"' : '';
+                           return '<td style="text-align:center;color:#f87171;font-weight:700;"'+tip+'>⚠ Yes</td>';
+                         })(),
 
               short:     '<td style="text-align:center;"><button onclick="placeShort(\''+t.symbol+'\','+parseFloat(t.lastPrice)+')" '+(canShort?'':'disabled ')+'style="padding:0.15rem 0.55rem;border-radius:4px;border:1px solid #f87171;background:transparent;color:#f87171;font-size:0.72rem;cursor:pointer;'+(canShort?'':'opacity:0.35;cursor:not-allowed;')+'">Short</button></td>',
               status:    '<td style="text-align:center;font-size:0.75rem;min-width:90px;" id="ss-'+t.symbol+'"><span style="color:'+ssColor+';">'+ssText+'</span></td>'
