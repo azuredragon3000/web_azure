@@ -881,7 +881,8 @@
     var posColConfig     = loadColConfig('posColConfig',     POS_COLS_DEFAULT);
 
     // Warning coins — loaded from warnings.txt in repo (manually maintained)
-    var warnSet = {};
+    var warnSet  = {};
+    var knownSet = new Set(); // all symbols present in warnings.txt (tracked)
     (function fetchWarnSet() {
       var dbg       = document.getElementById('warn-debug');
       var dbgTxt    = document.getElementById('warn-debug-text');
@@ -894,6 +895,7 @@
         .then(function(r) { return r.ok ? r.text() : Promise.reject('HTTP ' + r.status); })
         .then(function(text) {
           var coins = {};
+          var known = new Set();
           text.split('\n').forEach(function(line) {
             line = line.trim();
             if (!line || line.startsWith('#')) return;
@@ -901,9 +903,12 @@
             if (idx === -1) return;
             var sym = line.slice(0, idx).trim();
             var msg = line.slice(idx + 1).trim();
-            if (sym && msg) coins[sym] = { msg: msg };
+            if (!sym) return;
+            known.add(sym);
+            if (msg) coins[sym] = { msg: msg };
           });
-          warnSet = coins;
+          warnSet  = coins;
+          knownSet = known;
           var syms = Object.keys(coins).sort();
           if (dbgTxt) dbgTxt.innerHTML =
             '<span style="color:#4ade80;">✓ ' + syms.length + ' warning coins</span>'
@@ -1247,6 +1252,9 @@
       var qty      = (Math.floor(notional / price / stepSize) * stepSize).toFixed(countDecimals(stepSize));
       var limitPx  = (Math.round(price / tickSize) * tickSize).toFixed(countDecimals(tickSize));
       if (!confirm('SHORT ' + symbol + '\nQty: ' + qty + '  Price: $' + limitPx + '  Leverage: ' + lev + 'x\nMargin ~$' + margin + ', Notional ~$' + notional)) return;
+      if (!knownSet.has(symbol)) {
+        if (!confirm('⚠ CẢNH BÁO: ' + symbol + ' không có trong danh sách theo dõi warnings.txt!\nCoin này chưa được kiểm tra trạng thái cảnh báo trên Binance.\nBạn có muốn tiếp tục SHORT không?')) return;
+      }
       setShortStatus(symbol, 'WORKING', 'Setting margin...');
       try {
         if (!await ensureCrossMargin(symbol, setShortStatus)) return;
@@ -1275,6 +1283,9 @@
       var qty      = (Math.floor(notional / price / stepSize) * stepSize).toFixed(countDecimals(stepSize));
       var limitPx  = (Math.round(price / tickSize) * tickSize).toFixed(countDecimals(tickSize));
       if (!confirm('LONG ' + symbol + '\nQty: ' + qty + '  Price: $' + limitPx + '  Leverage: ' + lev + 'x\nMargin ~$' + margin + ', Notional ~$' + notional)) return;
+      if (!knownSet.has(symbol)) {
+        if (!confirm('⚠ CẢNH BÁO: ' + symbol + ' không có trong danh sách theo dõi warnings.txt!\nCoin này chưa được kiểm tra trạng thái cảnh báo trên Binance.\nBạn có muốn tiếp tục LONG không?')) return;
+      }
       setLongStatus(symbol, 'WORKING', 'Setting margin...');
       try {
         if (!await ensureCrossMargin(symbol, setLongStatus)) return;
