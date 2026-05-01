@@ -1,23 +1,15 @@
 """
 scrape_warnings.py
 ==================
-Step 1: Fetch all USDT-M perpetual futures symbols from fapi.
-Step 2 (fast): Check se=9 from bapi to detect Innovation Zone coins.
-Step 3 (slow): For a sample of se=9 coins, use Playwright to intercept 
-               the actual Binance futures page and capture the real warning
-               message text from the bapi response.
-Step 4: Save results to warning_coins.json (read by web app or GitHub Pages).
+Step 1: Fetch all USDT-M perpetual futures from fapi exchangeInfo.
+Step 2: For each symbol check bapi se=9 (Innovation Zone = warning coin).
+Step 3: Save results to warning_coins.json.
 
-Run locally:
-    pip install requests playwright
-    python -m playwright install chromium
-    python scrape_warnings.py
-
-Runs automatically via .github/workflows/scrape_warnings.yml
+No browser / Playwright needed — bapi check is accurate and fast.
+Runs on GitHub Actions via .github/workflows/scrape_warnings.yml
 """
 
 import json
-import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -27,13 +19,21 @@ import requests
 SESSION = requests.Session()
 SESSION.headers.update({
     'Accept': 'application/json',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'
 })
 
 STABLES = {
     'USDCUSDT', 'BUSDUSDT', 'TUSDUSDT', 'FDUSDUSDT',
     'USDPUSDT', 'DAIUSDT', 'EURUSDT', 'GBPUSDT', 'AEURUSDT',
 }
+
+# Innovation Zone warning message (same text for all se=9 coins)
+WARNING_MSG = (
+    'The underlying asset is an early-stage crypto project. '
+    'Relatively extreme price fluctuations may occur due to limited liquidity, '
+    'market dynamics and tokenomics. Conduct your own research, evaluate risk '
+    'and exercise caution.'
+)
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -72,9 +72,9 @@ def get_all_perps() -> list[dict]:
     ]
 
 
-# ── Step 2: bapi fast-check ───────────────────────────────────────────────────
+# ── Step 2: bapi check ───────────────────────────────────────────────────────
 
-def build_warn_map(perps: list[dict]) -> dict[str, dict]:
+def build_warn_map(perps: list) -> dict:
     pairs = [
         (s['symbol'], futures_sym_to_spot(s['symbol'], s.get('baseAsset', s['symbol'][:-4])))
         for s in perps
@@ -87,12 +87,13 @@ def build_warn_map(perps: list[dict]) -> dict[str, dict]:
         for f in as_completed(fmap):
             fsym, spot = fmap[f]
             info = f.result()
+            is_warn = info['se'] == '9'
             results[fsym] = {
                 'se':   info['se'],
                 'tags': info['tags'],
-                'warn': info['se'] == '9',
+                'warn': is_warn,
                 'spot': spot,
-                'msg':  None,   # filled in Step 3
+                'msg':  WARNING_MSG if is_warn else None,
             }
             done += 1
             if done % 100 == 0:
@@ -100,104 +101,6 @@ def build_warn_map(perps: list[dict]) -> dict[str, dict]:
     warn_count = sum(1 for v in results.values() if v['warn'])
     print(f'bapi done — {warn_count} Innovation Zone coins found.', flush=True)
     return results
-
-
-# ── Step 3: Playwright — intercept real warning API message ──────────────────
-
-def intercept_warning_message(symbol: str) -> str | None:
-    """
-    Load binance.com/en/futures/<symbol> in headless Chromium,
-    intercept XHR/fetch responses that contain risk/warning text,
-    return the message string or None.
-    """
-    try:
-        from playwright.sync_api import sync_playwright
-        captured = {}
-
-        def on_response(response):
-            if captured.get('msg'):
-                return
-            url = response.url
-            # Only look at bapi JSON responses
-            if 'bapi' not in url and 'risk' not in url.lower() and 'notice' not in url.lower():
-                return
-            try:
-                body = response.text()
-            except Exception:
-                return
-            # Look for known warning phrase keywords
-            if 'early-stage' in body or 'high volatility' in body or 'extreme price' in body:
-                try:
-                    data = json.loads(body)
-                    # Walk the JSON tree for string values containing the warning
-                    def find_msg(obj):
-                        if isinstance(obj, str):
-                            if 'early-stage' in obj or 'extreme price' in obj or 'high volatility' in obj:
-                                return obj
-                        elif isinstance(obj, dict):
-                            for v in obj.values():
-                                r = find_msg(v)
-                                if r: return r
-                        elif isinstance(obj, list):
-                            for item in obj:
-                                r = find_msg(item)
-                                if r: return r
-                        return None
-                    msg = find_msg(data)
-                    if msg:
-                        captured['msg'] = msg
-                        captured['url'] = url
-                except Exception:
-                    pass
-
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context(
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            )
-            page = context.new_page()
-            page.on('response', on_response)
-            try:
-                page.goto(
-                    f'https://www.binance.com/en/futures/{symbol}',
-                    wait_until='networkidle', timeout=30000
-                )
-            except Exception:
-                pass
-            # Also try clicking through any cookie banner
-            try:
-                page.wait_for_timeout(3000)
-            except Exception:
-                pass
-            browser.close()
-
-        if captured.get('msg'):
-            print(f'  [{symbol}] intercepted warning from: {captured.get("url","?")}', flush=True)
-            return captured['msg']
-    except Exception as e:
-        print(f'  [{symbol}] Playwright error: {e}', flush=True)
-    return None
-
-
-def enrich_with_messages(warn_map: dict, sample: int = 3) -> str | None:
-    """
-    Run Playwright on up to `sample` warning coins to discover the real
-    warning message text. Once found, apply to all warning coins.
-    Returns the message string, or None if not found.
-    """
-    warn_syms = [sym for sym, v in warn_map.items() if v['warn']][:sample]
-    if not warn_syms:
-        return None
-    print(f'Playwright: intercepting warning messages for {warn_syms}...', flush=True)
-    for sym in warn_syms:
-        msg = intercept_warning_message(sym)
-        if msg:
-            # Apply to all warning coins
-            for v in warn_map.values():
-                if v['warn']:
-                    v['msg'] = msg
-            return msg
-    return None
 
 
 # ── Step 4: save JSON ─────────────────────────────────────────────────────────
@@ -238,13 +141,6 @@ def main():
     print(f'\nBinance Warning Scraper  —  {datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")}')
     perps    = get_all_perps()
     warn_map = build_warn_map(perps)
-
-    # Try to intercept real warning message via Playwright (best effort)
-    try:
-        enrich_with_messages(warn_map, sample=3)
-    except Exception as e:
-        print(f'Playwright step skipped: {e}', flush=True)
-
     save_results(warn_map)
 
 
