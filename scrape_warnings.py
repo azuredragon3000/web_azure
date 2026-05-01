@@ -17,13 +17,11 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
-import requests
+import cloudscraper
 
-SESSION = requests.Session()
-SESSION.headers.update({
-    'Accept-Language': 'en-US,en;q=0.5',
-    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-})
+SESSION = cloudscraper.create_scraper(
+    browser={'browser': 'chrome', 'platform': 'linux', 'mobile': False}
+)
 
 # Use Tor/SOCKS proxy if available (set via HTTP_PROXY env in GitHub Actions)
 _proxy = os.environ.get('HTTP_PROXY') or os.environ.get('HTTPS_PROXY')
