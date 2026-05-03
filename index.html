@@ -241,6 +241,11 @@
       <span class="live-dot"></span>
       <h2 id="table-title">Watchlist</h2>
       <span class="update-time" id="update-time">Connecting...</span>
+      <span id="batch-btns" style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;">
+        <button onclick="runBatchAll('short')"  style="padding:0.2rem 0.6rem;border-radius:5px;border:1px solid #f87171;background:transparent;color:#f87171;font-size:0.72rem;cursor:pointer;" title="Short top N gainers one by one">Short All</button>
+        <button onclick="runBatchAll('long')"   style="padding:0.2rem 0.6rem;border-radius:5px;border:1px solid #4ade80;background:transparent;color:#4ade80;font-size:0.72rem;cursor:pointer;" title="Long top N gainers one by one">Long All</button>
+        <button onclick="runBatchAll('hedge')"  style="padding:0.2rem 0.6rem;border-radius:5px;border:1px solid #a78bfa;background:transparent;color:#a78bfa;font-size:0.72rem;cursor:pointer;" title="Hedge top N gainers one by one">Hedge All</button>
+      </span>
     </div>
 
     <!-- Warning debug banner -->
@@ -324,6 +329,19 @@
       </div>
       <div style="text-align:right;">
         <button class="info-close-btn" onclick="closeInfo()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Batch All Progress Modal -->
+  <div id="batch-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:3000;align-items:flex-start;justify-content:center;overflow-y:auto;padding:2rem 0;">
+    <div style="background:#111;border:1px solid #333;border-radius:10px;padding:1.5rem 2rem;min-width:340px;max-width:540px;width:90%;">
+      <h3 id="batch-title" style="margin:0 0 0.8rem;font-size:1rem;color:#eee;">Batch Order</h3>
+      <div id="batch-log" style="font-size:0.75rem;font-family:monospace;max-height:320px;overflow-y:auto;line-height:1.7;"></div>
+      <div id="batch-summary" style="margin-top:0.8rem;font-size:0.8rem;color:#888;display:none;"></div>
+      <div style="text-align:right;margin-top:1rem;">
+        <button id="batch-cancel-btn" onclick="batchCancelled=true;this.disabled=true;this.innerText='Cancelling...';" style="padding:0.3rem 0.8rem;border-radius:5px;border:1px solid #f87171;background:transparent;color:#f87171;font-size:0.75rem;cursor:pointer;margin-right:0.5rem;">Cancel</button>
+        <button id="batch-close-btn" onclick="closeBatchOverlay()" style="padding:0.3rem 0.8rem;border-radius:5px;border:1px solid #555;background:transparent;color:#aaa;font-size:0.75rem;cursor:pointer;display:none;">Close</button>
       </div>
     </div>
   </div>
@@ -836,6 +854,7 @@
     var shortStatuses           = {}; // symbol -> { state, msg, orderId }
     var longStatuses            = {}; // symbol -> { state, msg, orderId }
     var hedgeStatuses           = {}; // symbol -> { state, msg }
+    var fullGainerList          = []; // full sorted list from last loadRanking call
     var defaultShortMargin      = parseFloat(localStorage.getItem('shortMargin') || '1');
     var defaultTpTarget         = parseFloat(localStorage.getItem('tpTarget')    || '0.3');
     var hedgeLongMult           = parseFloat(localStorage.getItem('hedgeLongMult')  || '6');
@@ -1368,6 +1387,124 @@
       } catch(e) { setHedgeStatus(symbol, 'ERR', e.message || 'Error'); }
     }
 
+    var batchCancelled = false;
+
+    function closeBatchOverlay() {
+      document.getElementById('batch-overlay').style.display = 'none';
+      batchCancelled = false;
+    }
+
+    function batchLog(html) {
+      var el = document.getElementById('batch-log');
+      el.innerHTML += html + '<br>';
+      el.scrollTop = el.scrollHeight;
+    }
+
+    // Place one order for batch mode (no confirm dialogs, no knownSet check)
+    async function batchPlaceOrder(mode, symbol, price) {
+      var ei       = exInfoCache.futures && exInfoCache.futures[symbol];
+      var stepSize = (ei && ei.step) ? ei.step : 0.001;
+      var tickSize = (ei && ei.tick && ei.tick !== '--') ? ei.tick : 0.01;
+      var margin   = defaultShortMargin;
+      var lev      = Math.min(Math.max(Math.ceil(Math.max(hedgeLongMult, hedgeShortMult, 6)), 1), 125);
+      var limitPx  = (Math.round(price / tickSize) * tickSize).toFixed(countDecimals(tickSize));
+
+      // ensure CROSS margin
+      var mr = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/marginType', { symbol: symbol, marginType: 'CROSSED' });
+      if (mr && mr.code && mr.code !== -4046) throw new Error('Margin: ' + (mr.msg || mr.code));
+
+      var lr = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/leverage', { symbol: symbol, leverage: lev });
+      if (lr && lr.code) throw new Error('Lev: ' + (lr.msg || lr.code));
+
+      if (mode === 'short') {
+        var notional = margin * 6;
+        var qty = (Math.floor(notional / price / stepSize) * stepSize).toFixed(countDecimals(stepSize));
+        var o = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/order', {
+          symbol: symbol, side: 'SELL', positionSide: 'SHORT', type: 'LIMIT',
+          timeInForce: 'GTC', quantity: qty, price: limitPx
+        });
+        if (o.code) throw new Error(o.msg || 'Err ' + o.code);
+        shortStatuses[symbol] = { state: 'PENDING', msg: 'Pending #' + o.orderId, orderId: o.orderId };
+        pollOrder(symbol, o.orderId);
+        return 'Short #' + o.orderId;
+      }
+
+      if (mode === 'long') {
+        var notional = margin * 6;
+        var qty = (Math.floor(notional / price / stepSize) * stepSize).toFixed(countDecimals(stepSize));
+        var o = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/order', {
+          symbol: symbol, side: 'BUY', positionSide: 'LONG', type: 'LIMIT',
+          timeInForce: 'GTC', quantity: qty, price: limitPx
+        });
+        if (o.code) throw new Error(o.msg || 'Err ' + o.code);
+        longStatuses[symbol] = { state: 'PENDING', msg: 'Pending #' + o.orderId, orderId: o.orderId };
+        return 'Long #' + o.orderId;
+      }
+
+      if (mode === 'hedge') {
+        var longNotional  = margin * hedgeLongMult;
+        var shortNotional = margin * hedgeShortMult;
+        var longQty  = (Math.floor(longNotional  / price / stepSize) * stepSize).toFixed(countDecimals(stepSize));
+        var shortQty = (Math.floor(shortNotional / price / stepSize) * stepSize).toFixed(countDecimals(stepSize));
+        var lo = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/order', {
+          symbol: symbol, side: 'BUY', positionSide: 'LONG', type: 'LIMIT',
+          timeInForce: 'GTC', quantity: longQty, price: limitPx
+        });
+        if (lo.code) throw new Error('Long: ' + (lo.msg || 'Err ' + lo.code));
+        var so = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/order', {
+          symbol: symbol, side: 'SELL', positionSide: 'SHORT', type: 'LIMIT',
+          timeInForce: 'GTC', quantity: shortQty, price: limitPx
+        });
+        if (so.code) throw new Error('Short: ' + (so.msg || 'Err ' + so.code));
+        hedgeStatuses[symbol] = { state: 'PENDING', msg: 'L+S pending' };
+        longStatuses[symbol]  = { state: 'PENDING', msg: 'Pending #' + lo.orderId, orderId: lo.orderId };
+        shortStatuses[symbol] = { state: 'PENDING', msg: 'Pending #' + so.orderId, orderId: so.orderId };
+        return 'L#' + lo.orderId + ' S#' + so.orderId;
+      }
+    }
+
+    async function runBatchAll(mode) {
+      if (!fullGainerList.length) { alert('No gainers data — wait for table to load first.'); return; }
+      var target = parseInt(prompt('Số lệnh muốn đặt (mặc định 10):', '10'));
+      if (isNaN(target) || target <= 0) return;
+      var modeLabels = { short:'Short All', long:'Long All', hedge:'Hedge All' };
+      var modeColors = { short:'#f87171', long:'#4ade80', hedge:'#a78bfa' };
+      document.getElementById('batch-title').innerHTML = '<span style="color:'+modeColors[mode]+';">'+modeLabels[mode]+'</span> — '+ target +' coins';
+      document.getElementById('batch-log').innerHTML = '';
+      document.getElementById('batch-summary').style.display = 'none';
+      document.getElementById('batch-cancel-btn').disabled = false;
+      document.getElementById('batch-cancel-btn').innerText = 'Cancel';
+      document.getElementById('batch-close-btn').style.display = 'none';
+      document.getElementById('batch-overlay').style.display = 'flex';
+      batchCancelled = false;
+
+      var placed = 0;
+      var tried  = 0;
+
+      for (var i = 0; i < fullGainerList.length && placed < target; i++) {
+        if (batchCancelled) { batchLog('<span style="color:#f0b90b;">⚠ Cancelled by user</span>'); break; }
+        var t = fullGainerList[i];
+        tried++;
+        var sym = t.symbol;
+        var price = parseFloat(t.lastPrice);
+        batchLog('<span style="color:#888;">#' + tried + ' ' + sym + ' …</span>');
+        try {
+          var result = await batchPlaceOrder(mode, sym, price);
+          placed++;
+          batchLog('<span style="color:#4ade80;">  ✓ ' + sym + ' — ' + result + ' (' + placed + '/' + target + ')</span>');
+        } catch(e) {
+          batchLog('<span style="color:#f87171;">  ✗ ' + sym + ' — ' + (e.message || e) + ' → next coin</span>');
+        }
+      }
+
+      var summaryColor = placed >= target ? '#4ade80' : '#f0b90b';
+      var summaryText  = placed + ' / ' + target + ' orders placed (tried ' + tried + ' coins)';
+      document.getElementById('batch-summary').innerHTML = '<span style="color:'+summaryColor+';">'+summaryText+'</span>';
+      document.getElementById('batch-summary').style.display = '';
+      document.getElementById('batch-cancel-btn').style.display = 'none';
+      document.getElementById('batch-close-btn').style.display = '';
+    }
+
     function openInfo() {
       if (!openPositions.length) {
         document.getElementById('info-content').innerHTML = '<p style="color:#555;text-align:center;padding:2rem;">No open positions data yet — waiting for positions to load.</p>';
@@ -1688,6 +1825,8 @@
           });
 
           var top20 = list.slice(0, 20);
+          // cache full sorted list for batch buttons
+          fullGainerList = list;
           // store gainer rank for positions table (futures market only)
           if (market === 'futures') {
             posGainerRankMap = {};
