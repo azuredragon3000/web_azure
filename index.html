@@ -827,6 +827,7 @@
     var currentAvailableBalance = 0;
     var shortStatuses           = {}; // symbol -> { state, msg, orderId }
     var longStatuses            = {}; // symbol -> { state, msg, orderId }
+    var hedgeStatuses           = {}; // symbol -> { state, msg }
     var defaultShortMargin      = parseFloat(localStorage.getItem('shortMargin') || '1');
     var defaultTpTarget         = parseFloat(localStorage.getItem('tpTarget')    || '0.3');
     var sheetUrl                = localStorage.getItem('sheetUrl') || '';
@@ -844,6 +845,7 @@
       { id:'futurePos', label:'Future Pos',    visible:true },
       { id:'short',     label:'Short',         visible:true, always:true },
       { id:'long',      label:'Long',          visible:true, always:true },
+      { id:'hedge',     label:'Hedge',         visible:true, always:true },
       { id:'status',    label:'Status',        visible:true }
     ];
     var POS_COLS_DEFAULT = [
@@ -1168,6 +1170,17 @@
       el.innerHTML   = msg;
     }
 
+    function setHedgeStatus(symbol, state, msg) {
+      if (!hedgeStatuses[symbol]) hedgeStatuses[symbol] = {};
+      hedgeStatuses[symbol].state = state;
+      hedgeStatuses[symbol].msg   = msg;
+      var el = document.getElementById('hs-' + symbol);
+      if (!el) return;
+      var c = { PENDING:'#f0b90b', FILLED:'#4ade80', ERR:'#f87171', WORKING:'#aaa' }[state] || '#555';
+      el.style.color = c;
+      el.innerHTML   = msg;
+    }
+
     // Track symbols that require Algo endpoint (blocked by CORS from browser)
     var algoOnlySymbols = new Set(); // cleared — now using 30s cooldown instead
 
@@ -1300,6 +1313,49 @@
         longStatuses[symbol] = { state: 'PENDING', msg: 'Pending', orderId: order.orderId };
         setLongStatus(symbol, 'PENDING', 'Pending #' + order.orderId);
       } catch(e) { setLongStatus(symbol, 'ERR', e.message || 'Error'); }
+    }
+
+    // Hedge: place LONG + SHORT simultaneously, short notional = long notional * 1.03 (3% heavier short)
+    async function placeHedge(symbol, price) {
+      if (currentAvailableBalance < defaultShortMargin * 2) { setHedgeStatus(symbol, 'ERR', 'Avbl < $' + (defaultShortMargin * 2).toFixed(0)); return; }
+      var ei       = exInfoCache.futures && exInfoCache.futures[symbol];
+      var stepSize = (ei && ei.step) ? ei.step : 0.001;
+      var tickSize = (ei && ei.tick && ei.tick !== '--') ? ei.tick : 0.01;
+      var margin   = defaultShortMargin;
+      var lev      = Math.min(Math.max(Math.ceil(margin * 6 / margin), 1), 125);
+      var longNotional  = margin * 6;
+      var shortNotional = longNotional * 1.03;
+      var longQty  = (Math.floor(longNotional  / price / stepSize) * stepSize).toFixed(countDecimals(stepSize));
+      var shortQty = (Math.floor(shortNotional / price / stepSize) * stepSize).toFixed(countDecimals(stepSize));
+      var limitPx  = (Math.round(price / tickSize) * tickSize).toFixed(countDecimals(tickSize));
+      if (!confirm('HEDGE ' + symbol
+        + '\nLong:  Qty ' + longQty  + ' @ $' + limitPx + '  (notional ~$' + longNotional.toFixed(2) + ')'
+        + '\nShort: Qty ' + shortQty + ' @ $' + limitPx + '  (notional ~$' + shortNotional.toFixed(2) + ', +3%)'
+        + '\nLeverage: ' + lev + 'x  Margin each ~$' + margin)) return;
+      if (!knownSet.has(symbol)) {
+        if (!confirm('⚠ CẢNH BÁO: ' + symbol + ' không có trong danh sách theo dõi warnings.txt!\nBạn có muốn tiếp tục HEDGE không?')) return;
+      }
+      setHedgeStatus(symbol, 'WORKING', 'Checking margin...');
+      try {
+        var mr = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/marginType', { symbol: symbol, marginType: 'CROSSED' });
+        if (mr && mr.code && mr.code !== -4046) { setHedgeStatus(symbol, 'ERR', mr.msg || 'Margin err'); return; }
+        var lr = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/leverage', { symbol: symbol, leverage: lev });
+        if (lr && lr.code) { setHedgeStatus(symbol, 'ERR', lr.msg || 'Lev err'); return; }
+        setHedgeStatus(symbol, 'WORKING', 'Placing Long...');
+        var longOrder = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/order', {
+          symbol: symbol, side: 'BUY', positionSide: 'LONG', type: 'LIMIT',
+          timeInForce: 'GTC', quantity: longQty, price: limitPx
+        });
+        if (longOrder.code) { setHedgeStatus(symbol, 'ERR', 'Long: ' + (longOrder.msg || 'Err ' + longOrder.code)); return; }
+        setHedgeStatus(symbol, 'WORKING', 'Placing Short...');
+        var shortOrder = await binanceAuthPost('https://fapi.binance.com', '/fapi/v1/order', {
+          symbol: symbol, side: 'SELL', positionSide: 'SHORT', type: 'LIMIT',
+          timeInForce: 'GTC', quantity: shortQty, price: limitPx
+        });
+        if (shortOrder.code) { setHedgeStatus(symbol, 'ERR', 'Short: ' + (shortOrder.msg || 'Err ' + shortOrder.code)); return; }
+        hedgeStatuses[symbol] = { state: 'PENDING', msg: 'L+S pending' };
+        setHedgeStatus(symbol, 'PENDING', 'L+S pending');
+      } catch(e) { setHedgeStatus(symbol, 'ERR', e.message || 'Error'); }
     }
 
     function openInfo() {
@@ -1631,6 +1687,7 @@
             if (c.id==='funding') hdr += '<th style="text-align:right;">Funding</th>';
             else if (c.id==='short') hdr += '<th style="text-align:center;">Short</th>';
             else if (c.id==='long') hdr += '<th style="text-align:center;">Long</th>';
+            else if (c.id==='hedge') hdr += '<th style="text-align:center;">Hedge</th>';
             else if (c.id==='status') hdr += '<th style="text-align:center;">Status</th>';
             else if (c.id==='futurePos') hdr += '<th>Future Pos</th>';
 
@@ -1648,6 +1705,8 @@
             var canShort = !ssData.state || ssData.state === 'ERR';
             var lsData  = longStatuses[t.symbol] || {};
             var canLong  = !lsData.state || lsData.state === 'ERR';
+            var hsData  = hedgeStatuses[t.symbol] || {};
+            var canHedge = !hsData.state || hsData.state === 'ERR';
             var cellMap = {
               price:     '<td class="price">'+fmtPrice(t.lastPrice)+'</td>',
               chg24:     '<td class="chg '+chgClass(t.priceChangePercent)+'">'+fmtChg(t.priceChangePercent)+'</td>',
@@ -1672,6 +1731,7 @@
 
               short:     '<td style="text-align:center;"><button onclick="placeShort(\''+t.symbol+'\','+parseFloat(t.lastPrice)+')" '+(canShort?'':'disabled ')+'style="padding:0.15rem 0.55rem;border-radius:4px;border:1px solid #f87171;background:transparent;color:#f87171;font-size:0.72rem;cursor:pointer;'+(canShort?'':'opacity:0.35;cursor:not-allowed;')+'">Short</button></td>',
               long:      '<td style="text-align:center;"><button onclick="placeLong(\''+t.symbol+'\','+parseFloat(t.lastPrice)+')" '+(canLong?'':'disabled ')+'style="padding:0.15rem 0.55rem;border-radius:4px;border:1px solid #4ade80;background:transparent;color:#4ade80;font-size:0.72rem;cursor:pointer;'+(canLong?'':'opacity:0.35;cursor:not-allowed;')+'">Long</button></td>',
+              hedge:     '<td style="text-align:center;"><button onclick="placeHedge(\''+t.symbol+'\','+parseFloat(t.lastPrice)+')" '+(canHedge?'':'disabled ')+'style="padding:0.15rem 0.55rem;border-radius:4px;border:1px solid #a78bfa;background:transparent;color:#a78bfa;font-size:0.72rem;cursor:pointer;'+(canHedge?'':'opacity:0.35;cursor:not-allowed;')+'" title="Long + Short hedge (short 3% heavier)">L+S</button>'+'<div id="hs-'+t.symbol+'" style="font-size:0.65rem;color:#555;margin-top:1px;">'+(hsData.msg||'')+'</div></td>',
               status:    '<td style="text-align:center;font-size:0.75rem;min-width:90px;" id="ss-'+t.symbol+'"><span style="color:'+ssColor+';">'+ssText+'</span></td>'
             };
             var row = '<tr><td><div class="coin-cell">'
@@ -1692,6 +1752,10 @@
           Object.keys(longStatuses).forEach(function(sym) {
             var s = longStatuses[sym];
             if (s && s.state) setLongStatus(sym, s.state, s.msg);
+          });
+          Object.keys(hedgeStatuses).forEach(function(sym) {
+            var s = hedgeStatuses[sym];
+            if (s && s.state) setHedgeStatus(sym, s.state, s.msg);
           });
           if (market === 'futures') loadFundingData();
           document.getElementById('update-time').innerText = (market==='futures'?'Futures':'Spot') + ' · ' + new Date().toLocaleTimeString();
