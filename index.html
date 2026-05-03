@@ -356,6 +356,14 @@
           <input type="number" id="cfg-margin" min="0.5" step="0.5" value="1" />
         </div>
         <div class="cfg-row">
+          <label>Hedge — Long multiplier <span style="color:#555;font-size:0.68rem;text-transform:none;letter-spacing:0;">(long notional = margin × X)</span></label>
+          <input type="number" id="cfg-hedge-long" min="1" step="1" value="6" />
+        </div>
+        <div class="cfg-row">
+          <label>Hedge — Short multiplier <span style="color:#555;font-size:0.68rem;text-transform:none;letter-spacing:0;">(short notional = margin × X)</span></label>
+          <input type="number" id="cfg-hedge-short" min="1" step="1" value="10" />
+        </div>
+        <div class="cfg-row">
           <label>Auto TP Target Profit (USDT)</label>
           <input type="number" id="cfg-tp" min="0.01" step="0.1" value="0.3" />
         </div>
@@ -830,6 +838,8 @@
     var hedgeStatuses           = {}; // symbol -> { state, msg }
     var defaultShortMargin      = parseFloat(localStorage.getItem('shortMargin') || '1');
     var defaultTpTarget         = parseFloat(localStorage.getItem('tpTarget')    || '0.3');
+    var hedgeLongMult           = parseFloat(localStorage.getItem('hedgeLongMult')  || '6');
+    var hedgeShortMult          = parseFloat(localStorage.getItem('hedgeShortMult') || '10');
     var sheetUrl                = localStorage.getItem('sheetUrl') || '';
 
     /* ── Column config defaults ── */
@@ -1322,15 +1332,15 @@
       var stepSize = (ei && ei.step) ? ei.step : 0.001;
       var tickSize = (ei && ei.tick && ei.tick !== '--') ? ei.tick : 0.01;
       var margin   = defaultShortMargin;
-      var lev      = Math.min(Math.max(Math.ceil(margin * 6 / margin), 1), 125);
-      var longNotional  = margin * 6;
-      var shortNotional = longNotional * 1.03;
+      var lev      = Math.min(Math.max(Math.ceil(Math.max(hedgeLongMult, hedgeShortMult)), 1), 125);
+      var longNotional  = margin * hedgeLongMult;
+      var shortNotional = margin * hedgeShortMult;
       var longQty  = (Math.floor(longNotional  / price / stepSize) * stepSize).toFixed(countDecimals(stepSize));
       var shortQty = (Math.floor(shortNotional / price / stepSize) * stepSize).toFixed(countDecimals(stepSize));
       var limitPx  = (Math.round(price / tickSize) * tickSize).toFixed(countDecimals(tickSize));
       if (!confirm('HEDGE ' + symbol
-        + '\nLong:  Qty ' + longQty  + ' @ $' + limitPx + '  (notional ~$' + longNotional.toFixed(2) + ')'
-        + '\nShort: Qty ' + shortQty + ' @ $' + limitPx + '  (notional ~$' + shortNotional.toFixed(2) + ', +3%)'
+        + '\nLong:  Qty ' + longQty  + ' @ $' + limitPx + '  (notional ~$' + longNotional.toFixed(2) + ', ' + hedgeLongMult + 'x margin)'
+        + '\nShort: Qty ' + shortQty + ' @ $' + limitPx + '  (notional ~$' + shortNotional.toFixed(2) + ', ' + hedgeShortMult + 'x margin)'
         + '\nLeverage: ' + lev + 'x  Margin each ~$' + margin)) return;
       if (!knownSet.has(symbol)) {
         if (!confirm('⚠ CẢNH BÁO: ' + symbol + ' không có trong danh sách theo dõi warnings.txt!\nBạn có muốn tiếp tục HEDGE không?')) return;
@@ -1472,6 +1482,8 @@
     function openConfig() {
       document.getElementById('cfg-margin').value    = defaultShortMargin;
       document.getElementById('cfg-tp').value        = defaultTpTarget;
+      document.getElementById('cfg-hedge-long').value  = hedgeLongMult;
+      document.getElementById('cfg-hedge-short').value = hedgeShortMult;
       document.getElementById('cfg-sheet-url').value = sheetUrl;
       document.getElementById('cfg-password').value  = '';
       document.getElementById('cfg-newpass').value   = '';
@@ -1550,10 +1562,14 @@
       }
       defaultShortMargin = parseFloat(document.getElementById('cfg-margin').value) || 1;
       defaultTpTarget    = parseFloat(document.getElementById('cfg-tp').value) || 0.3;
+      hedgeLongMult      = parseFloat(document.getElementById('cfg-hedge-long').value)  || 6;
+      hedgeShortMult     = parseFloat(document.getElementById('cfg-hedge-short').value) || 10;
       var newUrl         = document.getElementById('cfg-sheet-url').value.trim();
       sheetUrl           = newUrl;
-      localStorage.setItem('shortMargin', defaultShortMargin);
-      localStorage.setItem('tpTarget',    defaultTpTarget);
+      localStorage.setItem('shortMargin',    defaultShortMargin);
+      localStorage.setItem('tpTarget',       defaultTpTarget);
+      localStorage.setItem('hedgeLongMult',  hedgeLongMult);
+      localStorage.setItem('hedgeShortMult', hedgeShortMult);
       localStorage.setItem('sheetUrl',    sheetUrl);
 
       // save column configs
